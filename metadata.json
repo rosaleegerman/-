@@ -1,0 +1,6 @@
+{
+  "name": "크리에이티브 노코드 빌더",
+  "description": "실시간 디자인 커스터마이징, 콘텐츠 관리(CMS), 디바이스 반응형 뷰를 제공하는 한국어 기반 풀스택 수준 노코드 웹사이트 빌더",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
