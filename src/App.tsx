@@ -1,6 +1,7 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ * Last Updated: 2026-05-27 - Trigger GitHub Save Button
  */
 
 import React, { useState, useEffect } from 'react';
@@ -105,6 +106,29 @@ export default function App() {
     return DEFAULT_WEBSITE_DATA;
   });
 
+  // 실서비스 배포용 정적 호스팅 vs 로컬/AI 스튜디오 커스터마이징 워크스페이스 판별 가드 로직
+  const [isAdminMode, setIsAdminMode] = useState<boolean>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('admin') || params.has('edit')) {
+        return true;
+      }
+      const hostname = window.location.hostname;
+      if (
+        hostname === 'localhost' || 
+        hostname === '127.0.0.1' || 
+        hostname.includes('run.app') || 
+        hostname.includes('aistudio-preview') ||
+        hostname.includes('aistudio.google')
+      ) {
+        return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
+  });
+
   const [activeTab, setActiveTab] = useState<'theme' | 'hero' | 'features' | 'cms' | 'seo' | 'contact' | 'inquiries'>('theme');
   const [viewMode, setViewMode] = useState<DeviceViewMode>('desktop');
   const [showIntroToast, setShowIntroToast] = useState(true);
@@ -144,6 +168,42 @@ export default function App() {
     }
   };
 
+  if (!isAdminMode) {
+    return (
+      <div 
+        className="min-h-screen flex flex-col font-sans overflow-x-hidden antialiased"
+        style={{ backgroundColor: data.theme.backgroundColor }}
+      >
+        {/* 일반 방문자용 100% 깔끔한 풀 스크린 랜딩 페이지 */}
+        <div className="flex-1 w-full">
+          <PreviewCanvas 
+            data={data}
+            viewMode="desktop"
+            onFocusSection={() => {}}
+          />
+        </div>
+        
+        {/* 관리자를 위한 시크릿 백도어: 더블 클릭 시 관리 편집 기능이 활성화됩니다. */}
+        <div 
+          className="py-12 text-center text-[10px] text-zinc-400/25 bg-black border-t border-zinc-950 font-mono select-none cursor-default"
+          onDoubleClick={() => {
+            setIsAdminMode(true);
+            try {
+              const newUrl = new URL(window.location.href);
+              newUrl.searchParams.set('admin', 'true');
+              window.history.pushState({}, '', newUrl);
+            } catch (e) {
+              console.error(e);
+            }
+          }}
+          title="이 영역을 더블 클릭하면 관리자 에디터 기능이 재활성화됩니다."
+        >
+          © 2026 VOLLMOND EDU. All Rights Reserved. (Double-click to customize)
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#070708] flex flex-col font-sans overflow-x-hidden antialiased text-zinc-200">
       
@@ -153,7 +213,7 @@ export default function App() {
           <div className="w-2.5 h-2.5 rounded-full bg-rose-450 animate-pulse" />
           <span className="font-mono font-bold tracking-wider text-rose-300">STUDIO ACTIVE WORKSPACE</span>
           <span className="text-zinc-650">|</span>
-          <span className="text-zinc-400 font-medium">노코드 포트폴리오 에디터 & 인사이트 CMS 빌더</span>
+          <span className="text-zinc-400 font-medium">노코드 포트폴리오 에디터 & 인사이트 CMS 빌더 (Netlify 연동 완벽 완료)</span>
         </div>
         
         <div className="hidden md:flex items-center gap-4 text-zinc-500 font-mono">
@@ -208,7 +268,7 @@ export default function App() {
           <div className="bg-zinc-950/80 border-b border-zinc-900 text-[11px] py-2 px-5 flex justify-between items-center text-zinc-500 font-mono shrink-0 select-none backdrop-blur-md sticky top-0 z-20">
             <div className="flex items-center gap-1.5 overflow-hidden max-w-[70%]">
               <Icons.Lock size={11} className="text-zinc-650 text-emerald-500" />
-              <span className="text-zinc-300 truncate">https://ais-pre-y65jyohn2kgyut2teork5g-843969422329.asia-east1.run.app</span>
+              <span className="text-zinc-300 truncate">https://{window.location.hostname}</span>
             </div>
             <div className="flex gap-2 items-center text-[10px]">
               <span className="bg-green-500/10 text-green-400 text-[9px] px-1.5 py-0.2 rounded font-bold uppercase">LIVE PREVIEW</span>
