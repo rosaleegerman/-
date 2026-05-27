@@ -27,6 +27,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
   const [showRegistrationPopup, setShowRegistrationPopup] = useState(false);
   const [showTeachersPopup, setShowTeachersPopup] = useState(false);
   const [showVideoPopup, setShowVideoPopup] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [activeCourseTab, setActiveCourseTab] = useState<'regular' | 'certificate'>('regular');
   
   // 문의 양식 서브밋 상태 모의 테스트용
@@ -197,12 +198,12 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
             {/* 소셜 퀵 연동 */}
             <div className="flex items-center gap-2">
               {seo.instagramLink && (
-                <a href={seo.instagramLink} target="_blank" rel="noreferrer" className="opacity-70 hover:opacity-100 transition-opacity">
+                <a href={seo.instagramLink} target="_blank" rel="noreferrer" className="opacity-70 hover:opacity-100 transition-opacity" style={{ color: theme.textColor }}>
                   <Icons.Instagram size={16} />
                 </a>
               )}
               {seo.kakaoLink && (
-                <a href={seo.kakaoLink} target="_blank" rel="noreferrer" className="opacity-70 hover:opacity-100 transition-opacity">
+                <a href={seo.kakaoLink} target="_blank" rel="noreferrer" className="opacity-70 hover:opacity-100 transition-opacity" style={{ color: theme.textColor }}>
                   <Icons.MessageSquareCode size={16} />
                 </a>
               )}
@@ -213,7 +214,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
                 e.preventDefault();
                 setShowRegistrationPopup(true);
               }}
-              className={`text-xs px-3 py-1.5 font-medium border transition-colors ${getRadiusClass()}`}
+              className={`text-xs px-2.5 py-1.5 font-medium border transition-colors ${getRadiusClass()}`}
               style={{ 
                 borderColor: theme.primaryColor, 
                 color: theme.primaryColor,
@@ -221,6 +222,14 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
             >
               수강 문의
             </a>
+            <button
+              onClick={() => setShowMobileMenu(true)}
+              className="sm:hidden p-1 hover:opacity-80 transition-opacity"
+              style={{ color: theme.textColor }}
+              title="메뉴"
+            >
+              <Icons.Menu size={20} />
+            </button>
           </div>
         </header>
 
@@ -1140,6 +1149,114 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
                 >
                   닫기
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showMobileMenu && (
+          <div 
+            className="absolute inset-0 bg-black/95 backdrop-blur-md flex flex-col p-6 z-[60] animate-fade-in"
+            style={{ fontFamily: theme.fontFamily === 'serif' ? 'Georgia, Cambria, serif' : 'system-ui, sans-serif' }}
+          >
+            {/* 헤더 */}
+            <div className="flex items-center justify-between mb-10 pb-4 border-b border-zinc-900">
+              <span className="text-xl font-black tracking-tight text-white">
+                VOLLMOND<span className="text-xs ml-1 font-normal opacity-70">[폴몬트]</span><span style={{ color: theme.primaryColor }}>.</span>
+              </span>
+              <button 
+                onClick={() => setShowMobileMenu(false)}
+                className="text-zinc-400 hover:text-white p-2 bg-zinc-900 rounded-full border border-zinc-800"
+              >
+                <Icons.X size={18} />
+              </button>
+            </div>
+
+            {/* 메뉴 목록 */}
+            <div className="flex-1 flex flex-col gap-6 justify-center max-w-sm mx-auto w-full text-center">
+              <button 
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  const el = document.getElementById('about');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  else onFocusSection('hero');
+                }}
+                className="py-3 text-lg font-bold border-b border-zinc-900 text-zinc-300 hover:text-white flex items-center justify-between"
+              >
+                <span>학원 소개</span>
+                <Icons.ChevronRight size={16} className="opacity-50" />
+              </button>
+
+              <button 
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setShowCourseInfo(true);
+                }}
+                className="py-3 text-lg font-bold border-b border-zinc-900 text-zinc-300 hover:text-white flex items-center justify-between"
+              >
+                <span>수업 정보</span>
+                <Icons.ChevronRight size={16} className="opacity-50" />
+              </button>
+
+              <button 
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setShowTeachersPopup(true);
+                }}
+                className="py-3 text-lg font-bold border-b border-zinc-900 text-zinc-300 hover:text-white flex items-center justify-between"
+              >
+                <span>강사 소개</span>
+                <Icons.ChevronRight size={16} className="opacity-50" />
+              </button>
+
+              <button 
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setShowVideoPopup(true);
+                }}
+                className="py-3 text-lg font-bold border-b border-zinc-900 text-zinc-300 hover:text-white flex items-center justify-between"
+              >
+                <span className="flex items-center gap-2">
+                  영상 강의
+                  <span className="text-[9px] font-black tracking-widest uppercase px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/15">
+                    SOON
+                  </span>
+                </span>
+                <Icons.ChevronRight size={16} className="opacity-50" />
+              </button>
+            </div>
+
+            {/* 하단 CTA & SNS 연동 */}
+            <div className="mt-auto max-w-sm mx-auto w-full space-y-6">
+              <button 
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setShowRegistrationPopup(true);
+                }}
+                className="w-full py-4 text-sm font-bold text-black text-center transition-all flex items-center justify-center gap-1.5"
+                style={{ 
+                  backgroundColor: theme.primaryColor,
+                  borderRadius: theme.borderRadius === 'none' ? '0px' : theme.borderRadius === 'full' ? '9999px' : '8px'
+                }}
+              >
+                <Icons.CalendarDays size={16} />
+                <span>지금 1:1 방문상담 예약하기</span>
+              </button>
+
+              {/* SNS 채널 연동 */}
+              <div className="flex items-center justify-center gap-4 py-2 text-zinc-400 border-t border-zinc-900">
+                {seo.instagramLink && (
+                  <a href={seo.instagramLink} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs hover:text-white">
+                    <Icons.Instagram size={14} />
+                    <span>인스타그램</span>
+                  </a>
+                )}
+                {seo.kakaoLink && (
+                  <a href={seo.kakaoLink} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs hover:text-white">
+                    <Icons.MessageSquareCode size={14} />
+                    <span>카카오톡 채널</span>
+                  </a>
+                )}
               </div>
             </div>
           </div>

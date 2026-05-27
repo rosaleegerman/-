@@ -37,16 +37,25 @@ export default function App() {
         if (parsed.seo && parsed.seo.emailLink === 'hello@apricot-studio.com') {
           parsed.seo.emailLink = 'rosa.lee.german@gmail.com';
         }
-        // 과거 데이터에 stats 필드가 빠져있을 경우 디폴트 stats 데이터를 주입합니다.
+        // 과거 데이터에 stats 필드가 빠져있거나 업데이트가 필요할 경우 무조건 새로운 데이터로 덮어씁니다.
         if (!parsed.stats || parsed.stats.length === 0) {
           parsed.stats = DEFAULT_WEBSITE_DATA.stats;
-        } else if (parsed.stats[0] && (parsed.stats[0].value === '교육 상담' || parsed.stats[0].value === '교육상담')) {
-          parsed.stats[0].value = '만점자 100% 배출';
-          parsed.stats[0].label = '매 시험마다 압도적인 상위권';
+        } else {
+          if (parsed.stats[0]) {
+            parsed.stats[0].value = '만점자100%배출';
+            parsed.stats[0].label = '매 시험 압도적 상위권';
+          }
+          if (parsed.stats[2]) {
+            parsed.stats[2].value = '압도적 1위';
+            parsed.stats[2].label = '외고 내신을 가장 잘 아는 학원';
+          }
         }
 
         // 사용자 기업 명칭 변경에 따른 기존 '아프리콧/Apricot' 및 'LUNA/Luna' 데이터 Vollmond 마이그레이션
         if (parsed.seo) {
+          if (!parsed.seo.instagramLink || parsed.seo.instagramLink.includes('apricot') || parsed.seo.instagramLink.includes('@vollmond_institute')) {
+            parsed.seo.instagramLink = 'https://www.instagram.com/vollmond_institute';
+          }
           if (parsed.seo.metaTitle?.includes('아프리콧') || parsed.seo.metaTitle?.includes('Apricot') || parsed.seo.metaTitle?.includes('브랜드 스튜디오')) {
             parsed.seo.metaTitle = '폴몬트 교육 디자인 | Vollmond Academy';
           }

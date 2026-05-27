@@ -10,7 +10,7 @@ export const DEFAULT_WEBSITE_DATA: WebsiteData = {
     "metaTitle": "VOLLMOND EDU 폴몬트 에듀",
     "metaDescription": "외고 내신 전문 학원\n영어/수학/독일어/스페인어/프랑스어/러시아어/일본어/중국어",
     "kakaoLink": "https://open.kakao.com/o/sdAs14Xh",
-    "instagramLink": "https://instagram.com/@vollmond_institute",
+    "instagramLink": "https://www.instagram.com/vollmond_institute",
     "youtubeLink": "https://youtube.com/@vollmond_institute",
     "emailLink": "rosa.lee.german@gmail.com"
   },
@@ -84,8 +84,8 @@ export const DEFAULT_WEBSITE_DATA: WebsiteData = {
   "stats": [
     {
       "id": "stat-1",
-      "value": "만점자 100% 배출",
-      "label": "매 시험마다 압도적인 상위권"
+      "value": "만점자100%배출",
+      "label": "매 시험 압도적 상위권"
     },
     {
       "id": "stat-2",
@@ -94,8 +94,8 @@ export const DEFAULT_WEBSITE_DATA: WebsiteData = {
     },
     {
       "id": "stat-3",
-      "value": "1위",
-      "label": "소수정예 밀착케어 만족도"
+      "value": "압도적 1위",
+      "label": "외고 내신을 가장 잘 아는 학원"
     }
   ]
 };
