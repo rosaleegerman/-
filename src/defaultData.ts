@@ -84,8 +84,8 @@ export const DEFAULT_WEBSITE_DATA: WebsiteData = {
   "stats": [
     {
       "id": "stat-1",
-      "value": "교육 상담",
-      "label": "실시간 접수/문의하기"
+      "value": "만점자 100% 배출",
+      "label": "매 시험마다 압도적인 상위권"
     },
     {
       "id": "stat-2",
