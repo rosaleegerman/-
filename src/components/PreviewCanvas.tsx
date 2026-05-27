@@ -26,6 +26,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
   const [showCourseInfo, setShowCourseInfo] = useState(false);
   const [showRegistrationPopup, setShowRegistrationPopup] = useState(false);
   const [showTeachersPopup, setShowTeachersPopup] = useState(false);
+  const [showVideoPopup, setShowVideoPopup] = useState(false);
   const [activeCourseTab, setActiveCourseTab] = useState<'regular' | 'certificate'>('regular');
   
   // 문의 양식 서브밋 상태 모의 테스트용
@@ -178,6 +179,17 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
               style={{ color: theme.textColor }}
             >
               강사 소개
+            </a>
+            <a 
+              href="#video-lectures" 
+              onClick={(e) => {
+                e.preventDefault();
+                setShowVideoPopup(true);
+              }}
+              className="hover:opacity-80 transition-opacity" 
+              style={{ color: theme.textColor }}
+            >
+              영상 강의
             </a>
           </nav>
 
@@ -1053,6 +1065,78 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
                 <button 
                   onClick={() => setShowTeachersPopup(false)}
                   className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-xs font-bold transition-all shadow-md"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showVideoPopup && (
+          <div 
+            className="absolute inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 z-[60] overflow-y-auto animate-fade-in"
+            onClick={() => setShowVideoPopup(false)}
+          >
+            <div 
+              className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col shadow-2xl relative"
+              style={{ fontFamily: theme.fontFamily === 'serif' ? 'Georgia, Cambria, serif' : 'system-ui, sans-serif' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 장식용 탑 디자인 바 */}
+              <div className="h-1.5 w-full" style={{ backgroundColor: theme.primaryColor }} />
+
+              {/* 닫기 헤더 물리 버튼 */}
+              <button 
+                onClick={() => setShowVideoPopup(false)}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white bg-zinc-850 hover:bg-zinc-800 p-2.5 rounded-full transition-all z-10"
+              >
+                <Icons.X size={15} />
+              </button>
+
+              <div className="p-8 text-center">
+                <div className="flex justify-center mb-5">
+                  <div className="w-16 h-16 rounded-full flex items-center justify-center bg-zinc-800 border border-zinc-700 animate-pulse">
+                    <Icons.Play size={26} className="text-red-500 fill-red-500 ml-1" />
+                  </div>
+                </div>
+                
+                <span className="inline-block text-[10px] font-black tracking-widest uppercase px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/15 mb-3">
+                  COMING SOON
+                </span>
+                
+                <h3 className="text-lg font-black text-white mb-2 leading-tight">
+                  온라인 영상 강의 서비스 준비 중
+                </h3>
+                
+                <p className="text-xs text-zinc-400 leading-relaxed break-keep max-w-sm mx-auto mb-6">
+                  폴몬트 학원 수강생분들을 위한 고품격 전문 인터넷 강의 서비스 런칭을 열심히 준비하고 있습니다. 조금만 더 기다려 주세요!
+                </p>
+
+                <div className="bg-zinc-950/60 border border-zinc-850 p-4 rounded-lg text-left space-y-1.5">
+                  <span className="text-[10px] font-bold text-zinc-500 block uppercase tracking-wider">주요 제공 예정 서비스</span>
+                  <div className="text-xs text-zinc-300 space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <Icons.Check size={12} className="text-emerald-500" />
+                      <span>외고 내신 과외급 명품 녹화강의 제공</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Icons.Check size={12} className="text-emerald-500" />
+                      <span>수강생 복습을 위한 고화질 VOD 플레이어</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Icons.Check size={12} className="text-emerald-500" />
+                      <span>부족한 파트를 채워 주기 위한 보완 동영상 강의</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 하단 버튼 */}
+              <div className="p-4 bg-zinc-950/80 border-t border-zinc-800 flex justify-end">
+                <button 
+                  onClick={() => setShowVideoPopup(false)}
+                  className="px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-xs font-bold transition-all w-full"
                 >
                   닫기
                 </button>
