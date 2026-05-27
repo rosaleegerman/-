@@ -227,10 +227,6 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
 
           <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center gap-10 relative z-10">
             <div className="flex-1 text-left">
-              {/* 편집 유도 가이드 */}
-              <span className="inline-block text-xs font-mono px-2 py-1 mb-4 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 group-hover:border-zinc-700 group-hover:text-zinc-200 transition-colors">
-                ✦ 드래그 및 설정에서 편집 가능
-              </span>
               <h1 
                 className={`text-3xl md:text-5xl font-extrabold leading-tight tracking-tight whitespace-pre-wrap ${getFontSizeClass()}`}
                 style={{ color: theme.textColor }}
