@@ -81,8 +81,7 @@ export default function App() {
             parsed.hero.subtitle = parsed.hero.subtitle.replace(/LUNA/gi, 'VOLLMOND');
           }
           if (!parsed.hero.imageUrl || parsed.hero.imageUrl.includes('photo-1618005182384-a83a8bd57fbe') || parsed.hero.imageUrl.includes('hero_vollmond_full_moon_1779890984787.png') || parsed.hero.imageUrl.includes('/src/assets/images/')) {
-            parsed.hero.imageUrl = '/assets/images/blue_sky_moon_1779892119976.png';
-          }
+parsed.hero.imageUrl = `${import.meta.env.BASE_URL}assets/images/blue_sky_moon_1779892119976.png`;          }
         }
         // 기존의 브랜드 디자인으로 들어간 핵심 기능을 폴몬트 학원용 특화 기능으로 마이그레이션합니다.
         if (parsed.features && parsed.features.length > 0) {
