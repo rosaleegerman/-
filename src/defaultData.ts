@@ -29,7 +29,7 @@ export const DEFAULT_WEBSITE_DATA: WebsiteData = {
     "subtitle": "분야 별 평균 10년 이상 검증된 전문가들이 제안하는\n외고 내신 공부의 정도(正道)",
     "ctaText": "수업 정보",
     "ctaLink": "#contact",
-    "imageUrl": "/assets/images/blue_sky_moon_1779892119976.png"
+    "imageUrl": "./assets/images/blue_sky_moon_1779892119976.png"
   },
   "features": [
     {
