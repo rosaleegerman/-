@@ -746,7 +746,13 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
                         {
                           subject: '독일어',
                           teacher: '이로사 T',
-                          desc: '[B2 대비반] 매주 금요일 17-20시 (영상 수강 가능 / 자체 제작 교재)',
+                          desc: '[B1 대비반] 매주 목요일 18-21시 (영상 수강 가능 / 자체 제작 교재)',
+                          price: '4회 400,000원',
+                        },
+                        {
+                          subject: '독일어',
+                          teacher: '이로사 T',
+                          desc: '[B2 대비반] 매주 금요일 18-21시 (영상 수강 가능 / 자체 제작 교재)',
                           price: '4회 400,000원',
                         }
                       ].map((item, idx) => (
