@@ -6,6 +6,8 @@
 import React, { useState } from 'react';
 import { WebsiteData, DeviceViewMode, CMSPost } from '../types';
 import * as Icons from 'lucide-react';
+import defaultHeroImage from '../../public/assets/images/blue_sky_moon_1779892119976.png';
+import kakaotalkQrCode from '../../public/assets/images/kakaotalk_qr_code_1779893911603.png';
 
 interface PreviewCanvasProps {
   data: WebsiteData;
@@ -289,7 +291,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
                   }}
                 >
                   <img 
-                    src={hero.imageUrl} 
+                    src={hero.imageUrl && (hero.imageUrl.includes('blue_sky_moon_1779892119976.png') || hero.imageUrl.endsWith('blue_sky_moon_1779892119976.png')) ? defaultHeroImage : hero.imageUrl} 
                     alt="Hero Graphics" 
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
@@ -846,7 +848,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
                 {/* QR Code Container */}
                 <div className="bg-white p-3 rounded-xl inline-block shadow-lg mx-auto mb-5">
                   <img 
-                    src="/assets/images/kakaotalk_qr_code_1779893911603.png" 
+                    src={kakaotalkQrCode} 
                     alt="KakaoTalk QR Code" 
                     className="w-44 h-44 object-contain"
                     referrerPolicy="no-referrer"
