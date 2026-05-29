@@ -846,7 +846,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
                 {/* QR Code Container */}
                 <div className="bg-white p-3 rounded-xl inline-block shadow-lg mx-auto mb-5">
                   <img 
-                    src="assets/images/kakaotalk_qr_code_1779893911603.png" 
+                    src="https://rosaleegerman.github.io/-/assets/images/kakaotalk_qr_code_1779893911603.png" 
                     alt="KakaoTalk QR Code" 
                     className="w-44 h-44 object-contain"
                     referrerPolicy="no-referrer"

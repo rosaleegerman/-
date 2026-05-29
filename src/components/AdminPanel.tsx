@@ -59,7 +59,7 @@ const THEME_PRESETS = [
 
 // 프리셋 이미지 데이터셋
 const UNAPLASH_PRESET_IMAGES = [
-  { label: '폴몬트 푸른 하늘 보름달 (Vollmond Blue Moon)', url: 'assets/images/blue_sky_moon_1779892119976.png' },
+  { label: '폴몬트 푸른 하늘 보름달 (Vollmond Blue Moon)', url: 'https://rosaleegerman.github.io/-/assets/images/blue_sky_moon_1779892119976.png' },
   { label: '추상 실크 (Abstract Silk)', url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80' },
   { label: '건축 미니멀 (Minimalist Arch)', url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80' },
   { label: '디자인 목업 (Creative Studio)', url: 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&w=800&q=80' },
