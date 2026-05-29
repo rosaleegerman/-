@@ -541,7 +541,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
 
         {/* -------------------- 포스트 모달 레이어 (인사이트 전문 읽기) -------------------- */}
         {selectedPost && (
-          <div className="absolute inset-0 bg-black/85 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className={`${viewMode === 'desktop' ? 'fixed' : 'absolute'} inset-0 bg-black/85 flex items-start md:items-center justify-center p-4 pt-10 md:pt-4 z-50 overflow-y-auto`}>
             <div 
               className="w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col max-h-[90%] shadow-2xl"
               style={{ fontFamily: theme.fontFamily === 'serif' ? 'Georgia, Cambria, serif' : 'system-ui, sans-serif' }}
@@ -596,7 +596,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
         {/* -------------------- 수업 과목 상세 정보 및 수강료 안내 화면 (새로운 화면) -------------------- */}
         {showCourseInfo && (
           <div 
-            className="absolute inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in"
+            className={`${viewMode === 'desktop' ? 'fixed' : 'absolute'} inset-0 bg-black/90 backdrop-blur-sm flex items-start md:items-center justify-center p-4 pt-10 md:pt-4 z-50 overflow-y-auto animate-fade-in`}
             onClick={() => setShowCourseInfo(false)}
           >
             <div 
@@ -809,7 +809,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
 
         {showRegistrationPopup && (
           <div 
-            className="absolute inset-0 bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in"
+            className={`${viewMode === 'desktop' ? 'fixed' : 'absolute'} inset-0 bg-black/95 backdrop-blur-sm flex items-start md:items-center justify-center p-4 pt-10 md:pt-4 z-50 overflow-y-auto animate-fade-in`}
             onClick={() => setShowRegistrationPopup(false)}
           >
             <div 
@@ -900,7 +900,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
 
         {showTeachersPopup && (
           <div 
-            className="absolute inset-0 bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in"
+            className={`${viewMode === 'desktop' ? 'fixed' : 'absolute'} inset-0 bg-black/95 backdrop-blur-sm flex items-start md:items-center justify-center p-4 pt-10 md:pt-4 z-50 overflow-y-auto animate-fade-in`}
             onClick={() => setShowTeachersPopup(false)}
           >
             <div 
@@ -1084,7 +1084,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
 
         {showVideoPopup && (
           <div 
-            className="absolute inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 z-[60] overflow-y-auto animate-fade-in"
+            className={`${viewMode === 'desktop' ? 'fixed' : 'absolute'} inset-0 bg-black/90 backdrop-blur-sm flex items-start md:items-center justify-center p-4 pt-10 md:pt-4 z-[60] overflow-y-auto animate-fade-in`}
             onClick={() => setShowVideoPopup(false)}
           >
             <div 
@@ -1156,7 +1156,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
 
         {showMobileMenu && (
           <div 
-            className="absolute inset-0 bg-black/95 backdrop-blur-md flex flex-col p-6 z-[60] animate-fade-in"
+            className={`${viewMode === 'desktop' ? 'fixed' : 'absolute'} inset-0 bg-black/95 backdrop-blur-md flex flex-col p-6 z-[60] animate-fade-in`}
             style={{ fontFamily: theme.fontFamily === 'serif' ? 'Georgia, Cambria, serif' : 'system-ui, sans-serif' }}
           >
             {/* 헤더 */}
