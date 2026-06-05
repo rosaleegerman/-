@@ -110,6 +110,9 @@ export default function App() {
             ];
           }
         }
+        if (!parsed.boardPosts || parsed.boardPosts.length === 0) {
+          parsed.boardPosts = DEFAULT_WEBSITE_DATA.boardPosts;
+        }
         return parsed;
       }
     } catch (e) {
@@ -141,7 +144,7 @@ export default function App() {
     return false;
   });
 
-  const [activeTab, setActiveTab] = useState<'theme' | 'hero' | 'features' | 'cms' | 'seo' | 'contact' | 'inquiries'>('theme');
+  const [activeTab, setActiveTab ] = useState<'theme' | 'hero' | 'features' | 'cms' | 'seo' | 'contact' | 'inquiries' | 'board'>('theme');
   const [viewMode, setViewMode] = useState<DeviceViewMode>('desktop');
   const [showIntroToast, setShowIntroToast] = useState(true);
 
@@ -192,6 +195,7 @@ export default function App() {
             data={data}
             viewMode="desktop"
             onFocusSection={() => {}}
+            onUpdateData={setData}
           />
         </div>
         
@@ -295,6 +299,7 @@ export default function App() {
               data={data}
               viewMode={viewMode}
               onFocusSection={handleFocusSection}
+              onUpdateData={setData}
             />
           </div>
 

@@ -10,8 +10,8 @@ import * as Icons from 'lucide-react';
 interface AdminPanelProps {
   data: WebsiteData;
   onChange: (newData: WebsiteData) => void;
-  activeTab: 'theme' | 'hero' | 'features' | 'cms' | 'seo' | 'contact' | 'inquiries';
-  setActiveTab: (tab: 'theme' | 'hero' | 'features' | 'cms' | 'seo' | 'contact' | 'inquiries') => void;
+  activeTab: 'theme' | 'hero' | 'features' | 'cms' | 'seo' | 'contact' | 'inquiries' | 'board';
+  setActiveTab: (tab: 'theme' | 'hero' | 'features' | 'cms' | 'seo' | 'contact' | 'inquiries' | 'board') => void;
   viewMode: 'desktop' | 'tablet' | 'mobile';
   setViewMode: (mode: 'desktop' | 'tablet' | 'mobile') => void;
   onResetToDefault: () => void;
@@ -85,6 +85,11 @@ export default function AdminPanel({
   const [publishing, setPublishing] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showIconSelectForFeatureId, setShowIconSelectForFeatureId] = useState<string | null>(null);
+
+  // 공부 질문 게시판 관리 로컬 상태
+  const [selectedAdminBoardPostId, setSelectedAdminBoardPostId ] = useState<string | null>(null);
+  const [adminReplyText, setAdminReplyText ] = useState('');
+  const [adminSuccessMessage, setAdminSuccessMessage ] = useState('');
 
   // 게시판 작성 폼 로컬 임시 상태
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
@@ -315,34 +320,41 @@ export default function AdminPanel({
       </div>
 
       {/* -------------------- 어드민 탭 디스플레이 선택 -------------------- */}
-      <div className="grid grid-cols-4 border-b border-zinc-900 text-center text-xs font-semibold bg-zinc-950">
+      <div className="grid grid-cols-5 border-b border-zinc-900 text-center text-[10px] md:text-xs font-semibold bg-zinc-950">
         <button 
           onClick={() => { setActiveTab('theme'); setIsCreatingNewPost(false); setEditingPostId(null); }}
-          className={`py-3 flex flex-col items-center gap-1 border-b-2 transition-all ${activeTab === 'theme' ? 'border-rose-400 bg-zinc-900/40 text-rose-300 font-bold' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'}`}
+          className={`py-3 flex flex-col items-center justify-center gap-1 border-b-2 transition-all ${activeTab === 'theme' ? 'border-rose-400 bg-zinc-900/40 text-rose-300 font-bold' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'}`}
         >
           <Icons.Paintbrush size={14} />
-          <span>테마 디자인</span>
+          <span>디자인</span>
         </button>
         <button 
           onClick={() => { setActiveTab('hero'); setIsCreatingNewPost(false); setEditingPostId(null); }}
-          className={`py-3 flex flex-col items-center gap-1 border-b-2 transition-all ${activeTab === 'hero' ? 'border-rose-400 bg-zinc-900/40 text-rose-300 font-bold' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'}`}
+          className={`py-3 flex flex-col items-center justify-center gap-1 border-b-2 transition-all ${activeTab === 'hero' ? 'border-rose-400 bg-zinc-900/40 text-rose-300 font-bold' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'}`}
         >
           <Icons.FileText size={14} />
-          <span>메인 레이아웃</span>
+          <span>레이아웃</span>
         </button>
         <button 
           onClick={() => { setActiveTab('cms'); }}
-          className={`py-3 flex flex-col items-center gap-1 border-b-2 transition-all ${activeTab === 'cms' ? 'border-rose-400 bg-zinc-900/40 text-rose-300 font-bold' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'}`}
+          className={`py-3 flex flex-col items-center justify-center gap-1 border-b-2 transition-all ${activeTab === 'cms' ? 'border-rose-400 bg-zinc-900/40 text-rose-300 font-bold' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'}`}
         >
           <Icons.Globe size={14} />
-          <span>인사이트 CMS</span>
+          <span>인사이트</span>
         </button>
         <button 
           onClick={() => { setActiveTab('seo'); setIsCreatingNewPost(false); setEditingPostId(null); }}
-          className={`py-3 flex flex-col items-center gap-1 border-b-2 transition-all ${activeTab === 'seo' ? 'border-rose-400 bg-zinc-900/40 text-rose-300 font-bold' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'}`}
+          className={`py-3 flex flex-col items-center justify-center gap-1 border-b-2 transition-all ${activeTab === 'seo' ? 'border-rose-400 bg-zinc-900/40 text-rose-300 font-bold' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'}`}
         >
           <Icons.Sparkles size={14} />
-          <span>마케팅/SEO</span>
+          <span>마케팅</span>
+        </button>
+        <button 
+          onClick={() => { setActiveTab('board'); setIsCreatingNewPost(false); setEditingPostId(null); }}
+          className={`py-3 flex flex-col items-center justify-center gap-1 border-b-2 transition-all ${activeTab === 'board' ? 'border-rose-400 bg-zinc-900/40 text-rose-300 font-bold' : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/20'}`}
+        >
+          <Icons.LockKeyhole size={14} />
+          <span>질문게시판</span>
         </button>
       </div>
 
@@ -1144,11 +1156,197 @@ export default function AdminPanel({
             </div>
           </div>
         )}
+
+        {/* ===================== 7. 공부 질문 게시판 1:1 관리 답변 기능 ===================== */}
+        {activeTab === 'board' && (
+          <div className="space-y-6 animate-fade-in text-zinc-300">
+            <div>
+              <span className="block text-[11px] font-bold text-rose-300 tracking-wider">공부 질문 게시판 관리 센터 (Vollmond Strategy Q&A Manager)</span>
+              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                학생들이 보호된 비밀글 형태로 남긴 공부/수강 질문 이력입니다. 이곳에서 질문 상세 글을 확인(분실 비밀번호 자동 백업 표시)하고, 1:1 교수단 맞춤 소견 답변을 작성할 수 있습니다.
+              </p>
+            </div>
+
+            {adminSuccessMessage && (
+              <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-3 rounded-lg text-xs font-bold">
+                ✓ {adminSuccessMessage}
+              </div>
+            )}
+
+            {/* 질문 세부 열람 및 답변 작성 기구 */}
+            {selectedAdminBoardPostId ? (() => {
+              const activePost = (data.boardPosts || []).find(p => p.id === selectedAdminBoardPostId);
+              if (!activePost) {
+                return (
+                  <div className="text-center py-4">
+                    <p className="text-xs text-zinc-500">포스트를 찾을 수 없습니다.</p>
+                    <button onClick={() => setSelectedAdminBoardPostId(null)} className="text-xs text-rose-300 underline mt-2">목록으로</button>
+                  </div>
+                );
+              }
+              
+              return (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-4">
+                  <div className="flex justify-between items-center border-b border-zinc-850 pb-2">
+                    <button 
+                      onClick={() => {
+                        setSelectedAdminBoardPostId(null);
+                        setAdminReplyText('');
+                      }}
+                      className="text-xs font-bold text-rose-200 hover:underline flex items-center gap-1"
+                    >
+                      <Icons.ChevronLeft size={14} /> 목록으로 돌아가기
+                    </button>
+                    <span className="text-[10px] text-zinc-500 font-mono">{activePost.createdAt}</span>
+                  </div>
+
+                  {/* 글 상세 메타 데이터 */}
+                  <div className="space-y-1">
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider text-rose-350">질문 상세</h3>
+                    <div className="bg-zinc-950 p-3 rounded text-xs select-text space-y-2 border border-zinc-850">
+                      <div>
+                        <strong>제목:</strong> <span className="text-zinc-200">{activePost.title}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 text-[11px] text-zinc-400 font-mono">
+                        <div>작성자: <span className="text-zinc-350 font-bold">{activePost.author}</span></div>
+                        <div>이메일: <span className="text-zinc-340 font-bold">{activePost.email}</span></div>
+                        <div className="flex items-center gap-1 text-amber-350">
+                          <Icons.Key size={10} />
+                          <span>비밀번호 백업: <strong className="text-amber-200">{activePost.passwordHash}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 질문 본문 */}
+                  <div className="space-y-1">
+                    <h4 className="text-[10px] text-zinc-400 font-bold uppercase">상담 질문 내용</h4>
+                    <div className="bg-zinc-950 p-3.5 rounded text-xs text-zinc-300 whitespace-pre-wrap border border-zinc-850 leading-relaxed max-h-40 overflow-y-auto">
+                      {activePost.content}
+                    </div>
+                  </div>
+
+                  {/* 답변 작성 영역 */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-[10px] text-rose-300 font-bold uppercase flex items-center gap-1">
+                        <Icons.Sparkles size={11} /> 학원 피드백 답변 작성
+                      </h4>
+                      {activePost.replies && (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 font-bold">답변 수정 모드</span>
+                      )}
+                    </div>
+                    <textarea 
+                      rows={5}
+                      value={adminReplyText}
+                      onChange={(e) => setAdminReplyText(e.target.value)}
+                      placeholder="이곳에 정성 어린 교수단 피드백 조언과 커리큘럼 추천 답변을 적어주세요. 작성한 글은 질문자가 본인 비밀번호로 조회 시 상세하게 연동 노출됩니다."
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded p-2.5 text-xs text-white focus:outline-none focus:border-rose-450 focus:ring-1 focus:ring-rose-450 leading-relaxed resize-none"
+                    />
+                  </div>
+
+                  {/* 버튼 작동 액션 구조 */}
+                  <div className="flex justify-between items-center">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm('이 학생 질문글을 메인 데이터베이스에서 완전히 삭제합니까?')) {
+                          const updated = (data.boardPosts || []).filter(p => p.id !== activePost.id);
+                          onChange({ ...data, boardPosts: updated });
+                          setSelectedAdminBoardPostId(null);
+                          setAdminReplyText('');
+                          setAdminSuccessMessage('공부 질문글을 안전하게 삭제 환원했습니다.');
+                          setTimeout(() => setAdminSuccessMessage(''), 3000);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-red-955 text-red-400 hover:text-red-300 hover:bg-red-900/10 border border-red-900/10 rounded text-xs font-bold transition-all"
+                    >
+                      질문 삭제
+                    </button>
+
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        const updatedPosts = (data.boardPosts || []).map(p => {
+                          if (p.id === activePost.id) {
+                            return { ...p, replies: adminReplyText };
+                          }
+                          return p;
+                        });
+                        onChange({ ...data, boardPosts: updatedPosts });
+                        
+                        setAdminSuccessMessage('✓ 1:1 맞춤 학원 소견 답변을 성공적으로 저장 및 적용 완료했습니다!');
+                        setTimeout(() => setAdminSuccessMessage(''), 3000);
+                      }}
+                      className="px-4 py-2 bg-rose-400 text-black font-extrabold hover:brightness-110 rounded text-xs transition-all flex items-center gap-1"
+                    >
+                      <Icons.Check size={14} strokeWidth={2.5} />
+                      <span>답변 저장하기</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })() : (
+              /* 질문 리스트화 목록 */
+              <div className="space-y-3">
+                {(data.boardPosts || []).length === 0 ? (
+                  <div className="text-center py-10 bg-zinc-90 w-full rounded border border-zinc-850 text-zinc-500 space-y-1 text-xs">
+                    <Icons.LockKeyhole className="mx-auto opacity-30 mb-1" size={24} />
+                    <p>현재 접수되어 쌓인 공부 질문이 없습니다.</p>
+                  </div>
+                ) : (
+                  (data.boardPosts || []).map((post) => (
+                    <div 
+                      key={post.id}
+                      onClick={() => {
+                        setSelectedAdminBoardPostId(post.id);
+                        setAdminReplyText(post.replies || '');
+                      }}
+                      className="p-3.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-750 rounded-lg cursor-pointer transition-all flex justify-between items-center gap-4 group"
+                    >
+                      <div className="space-y-1.5 w-[75%]">
+                        <div className="flex items-center gap-1.5">
+                          {post.replies ? (
+                            <Icons.CheckCircle size={13} className="text-emerald-400 shrink-0" />
+                          ) : (
+                            <Icons.HelpCircle size={13} className="text-rose-350 shrink-0" />
+                          )}
+                          <span className="text-xs text-zinc-100 font-bold group-hover:text-rose-300 transition-colors line-clamp-1">
+                            {post.title}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-mono">
+                          <span>작성자: <strong>{post.author}</strong></span>
+                          <span>|</span>
+                          <span className="text-amber-300 font-bold">비번: {post.passwordHash}</span>
+                          <span>|</span>
+                          <span>{post.createdAt}</span>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        {post.replies ? (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                            답변완료
+                          </span>
+                        ) : (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold animate-pulse">
+                            대기중
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* -------------------- 대시보드 고정 푸터 (저장 및 배포) -------------------- */}
       <div className="p-4 border-t border-zinc-900 bg-zinc-950/90 spacing-y-3 shrink-0">
-        <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="grid grid-cols-3 gap-2 mb-3">
           <button 
             type="button" 
             onClick={() => {
@@ -1156,19 +1354,32 @@ export default function AdminPanel({
               setIsCreatingNewPost(false);
               setEditingPostId(null);
             }}
-            className={`p-2 bg-zinc-900 hover:bg-zinc-850 text-[11px] rounded font-bold border border-zinc-800 hover:border-zinc-700 text-zinc-300 flex items-center justify-center gap-1`}
+            className={`p-2 bg-zinc-900 hover:bg-zinc-850 text-[10px] rounded font-bold border border-zinc-800 hover:border-zinc-700 text-zinc-300 flex items-center justify-center gap-1`}
           >
             <Icons.Mail size={12} />
-            <span>상담 수신함</span>
+            <span>상담함</span>
+          </button>
+
+          <button 
+            type="button" 
+            onClick={() => {
+              setActiveTab('board');
+              setSelectedAdminBoardPostId(null);
+              setAdminReplyText('');
+            }}
+            className={`p-2 bg-zinc-900 hover:bg-zinc-850 text-[10px] rounded font-bold border border-zinc-800 hover:border-zinc-700 text-zinc-300 flex items-center justify-center gap-1`}
+          >
+            <Icons.LockKeyhole size={12} />
+            <span>Q&A관리</span>
           </button>
           
           <button 
             type="button" 
             onClick={() => setShowExportModal(true)}
-            className="p-2 bg-zinc-900 hover:bg-zinc-850 text-[11px] rounded font-bold border border-zinc-800 hover:border-zinc-700 text-zinc-300 flex items-center justify-center gap-1"
+            className="p-2 bg-zinc-900 hover:bg-zinc-850 text-[10px] rounded font-bold border border-zinc-800 hover:border-zinc-700 text-zinc-300 flex items-center justify-center gap-1"
           >
             <Icons.Download size={12} />
-            <span>소스 코드 추출</span>
+            <span>소스추출</span>
           </button>
         </div>
 

@@ -64,6 +64,18 @@ export interface CMSPost {
   status: 'published' | 'draft';
 }
 
+// 공부 질문 게시판 (Q&A Board) 아이템 타입
+export interface BoardPost {
+  id: string;
+  title: string;
+  author: string;
+  email: string;
+  content: string;
+  passwordHash: string; // 확인/수정/삭제용 비밀번호 (단순 텍스트 저장)
+  createdAt: string;
+  replies?: string; // 학원 답변 (선택 사항)
+}
+
 export interface StatItem {
   id: string;
   value: string;
@@ -79,6 +91,7 @@ export interface WebsiteData {
   stats: StatItem[];
   contact: ContactConfig;
   posts: CMSPost[];
+  boardPosts?: BoardPost[]; // 공부 질문 게시판 포스트 리스트
 }
 
 // 디바이스 미리보기 모드 설정

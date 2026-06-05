@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { WebsiteData, DeviceViewMode, CMSPost } from '../types';
+import { WebsiteData, DeviceViewMode, CMSPost, BoardPost } from '../types';
 import * as Icons from 'lucide-react';
 import defaultHeroImage from '../../public/assets/images/blue_sky_moon_1779892119976.png';
 import kakaotalkQrCode from '../../public/assets/images/kakaotalk_qr_code_1779893911603.png';
@@ -13,6 +13,7 @@ interface PreviewCanvasProps {
   data: WebsiteData;
   viewMode: DeviceViewMode;
   onFocusSection: (section: 'theme' | 'hero' | 'features' | 'cms' | 'seo' | 'contact') => void;
+  onUpdateData?: (newData: WebsiteData) => void;
 }
 
 // 아이콘 타입 안전 가드 및 동적 렌더링 도구
@@ -22,7 +23,7 @@ const DynamicIcon = ({ name, className, color }: { name: string; className?: str
   return <IconComponent className={className} style={{ color }} size={20} />;
 };
 
-export default function PreviewCanvas({ data, viewMode, onFocusSection }: PreviewCanvasProps) {
+export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdateData }: PreviewCanvasProps) {
   const { theme, hero, features, contact, posts, seo } = data;
   const [selectedPost, setSelectedPost] = useState<CMSPost | null>(null);
   const [showCourseInfo, setShowCourseInfo] = useState(false);
@@ -31,6 +32,24 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
   const [showVideoPopup, setShowVideoPopup] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [activeCourseTab, setActiveCourseTab] = useState<'regular' | 'certificate'>('regular');
+  
+  // 공부 질문 게시판 (Q&A Board) 관련 상태
+  const [showBoardPopup, setShowBoardPopup] = useState(false);
+  const [selectedBoardPost, setSelectedBoardPost] = useState<BoardPost | null>(null);
+  const [boardPasswordInput, setBoardPasswordInput] = useState('');
+  const [boardPasswordError, setBoardPasswordError] = useState('');
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [isCreatingPost, setIsCreatingPost] = useState(false);
+  const [isEditingPost, setIsEditingPost] = useState(false);
+  
+  // 신규/수정 작성용 폼 필드 상태
+  const [boardPostName, setBoardPostName] = useState('');
+  const [boardPostPassword, setBoardPostPassword] = useState('');
+  const [boardPostEmail, setBoardPostEmail] = useState('');
+  const [boardPostTitle, setBoardPostTitle] = useState('');
+  const [boardPostContent, setBoardPostContent] = useState('');
+  const [boardPostFormError, setBoardPostFormError] = useState('');
+  const [boardSuccessToast, setBoardSuccessToast] = useState('');
   
   // 문의 양식 서브밋 상태 모의 테스트용
   const [inquiryName, setInquiryName] = useState('');
@@ -50,6 +69,108 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
       setInquiryEmail('');
       setInquiryMessage('');
     }, 5000);
+  };
+
+  // 공부 질문 게시판 포스트 처리 함수군 (완벽 작동 기획)
+  const handleCreatePost = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!boardPostName || !boardPostPassword || !boardPostEmail || !boardPostTitle || !boardPostContent) {
+      setBoardPostFormError('모든 양식 필드를 누락 없이 입력해 주세요.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(boardPostEmail)) {
+      setBoardPostFormError('유효한 이메일 주소 형식을 입력해 주세요.');
+      return;
+    }
+    if (boardPostPassword.length < 4) {
+      setBoardPostFormError('비밀번호는 수정 및 삭제 관리를 위해 최소 4자리 이상으로 설정해 주세요.');
+      return;
+    }
+
+    const newPost: BoardPost = {
+      id: `board-${Date.now()}`,
+      title: boardPostTitle,
+      author: boardPostName,
+      email: boardPostEmail,
+      content: boardPostContent,
+      passwordHash: boardPostPassword,
+      createdAt: new Date().toISOString().split('T')[0],
+      replies: "안녕하세요! 폴몬트 에듀 개별 밀착 Q&A 게시판에 상세 질문을 전송해 주셔서 감사합니다. 기재하여 주신 연락처와 본 비밀글 답변창을 통해 담당 학과별 입시 전략 전담 선생님께서 24시간 이내에 꼼꼼한 심층 맞춤 답변 및 다음 수강 전 레벨 평가 안내 가이드를 전달할 예정입니다! 조금만 대기 요망 드립니다."
+    };
+
+    const updatedPosts = [newPost, ...(data.boardPosts || [])];
+    if (onUpdateData) {
+      onUpdateData({
+        ...data,
+        boardPosts: updatedPosts
+      });
+    }
+
+    // 초기화
+    setBoardPostName('');
+    setBoardPostPassword('');
+    setBoardPostEmail('');
+    setBoardPostTitle('');
+    setBoardPostContent('');
+    setBoardPostFormError('');
+    setIsCreatingPost(false);
+    
+    setBoardSuccessToast('✓ 새 질문글이 안전하게 등록되었습니다! (모두 자동 비밀글 처리 완료)');
+    setTimeout(() => setBoardSuccessToast(''), 4000);
+  };
+
+  const handleEditPost = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBoardPost) return;
+    if (!boardPostName || !boardPostEmail || !boardPostTitle || !boardPostContent) {
+      setBoardPostFormError('수정할 필드가 비어있을 수 없습니다.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(boardPostEmail)) {
+      setBoardPostFormError('유효한 이메일 주소 형식을 입력해 주세요.');
+      return;
+    }
+
+    const updatedPost: BoardPost = {
+      ...selectedBoardPost,
+      title: boardPostTitle,
+      author: boardPostName,
+      email: boardPostEmail,
+      content: boardPostContent,
+    };
+
+    const updatedPosts = (data.boardPosts || []).map(p => p.id === selectedBoardPost.id ? updatedPost : p);
+    if (onUpdateData) {
+      onUpdateData({
+        ...data,
+        boardPosts: updatedPosts
+      });
+    }
+
+    setSelectedBoardPost(updatedPost);
+    setIsEditingPost(false);
+    setBoardPostFormError('');
+    setBoardSuccessToast('✓ 질문글이 성공적으로 수정되었습니다.');
+    setTimeout(() => setBoardSuccessToast(''), 4000);
+  };
+
+  const handleDeletePost = (postId: string) => {
+    if (!window.confirm('이 공부 질문글을 영구적으로 삭제하시겠습니까? 삭제 후에는 복구가 불가능합니다.')) {
+      return;
+    }
+    const updatedPosts = (data.boardPosts || []).filter(p => p.id !== postId);
+    if (onUpdateData) {
+      onUpdateData({
+        ...data,
+        boardPosts: updatedPosts
+      });
+    }
+    setSelectedBoardPost(null);
+    setIsUnlocked(false);
+    setBoardSuccessToast('✓ 질문글이 정상적으로 제거 완료되었습니다.');
+    setTimeout(() => setBoardSuccessToast(''), 4000);
   };
 
   // 폰트 스타일 매핑
@@ -194,6 +315,18 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
             >
               영상 강의
             </a>
+            <a 
+              href="#board" 
+              onClick={(e) => {
+                e.preventDefault();
+                setShowBoardPopup(true);
+              }}
+              className="hover:opacity-80 transition-opacity flex items-center gap-1 font-bold text-rose-300"
+              style={{ color: theme.primaryColor }}
+            >
+              <span>공부 질문 게시판</span>
+              <Icons.LockKeyhole size={13} className="opacity-80 animate-pulse" />
+            </a>
           </nav>
 
           <div className="flex items-center gap-3">
@@ -296,9 +429,6 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                   />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
-                    <span className="text-white text-xs bg-black/60 px-2 py-1 rounded">이미지 주소 편집하기</span>
-                  </div>
                 </div>
               </div>
             )}
@@ -1130,6 +1260,20 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
                   폴몬트 학원 수강생분들을 위한 고품격 전문 인터넷 강의 서비스 런칭을 열심히 준비하고 있습니다. 조금만 더 기다려 주세요!
                 </p>
 
+                {/* 유튜브 모의고사 해설 특화 단독 배너 단추 */}
+                <div className="mb-6">
+                  <a 
+                    href="https://www.youtube.com/@vollmond_institute" 
+                    target="_blank" 
+                    rel="noreferrer noopener"
+                    className="w-full flex items-center justify-center gap-2.5 px-4 py-3 bg-red-650 hover:bg-red-600 rounded-lg text-white text-xs font-black transition-all shadow-md group border border-red-500/20 active:scale-[0.98]"
+                  >
+                    <Icons.Youtube className="text-white shrink-0 animate-pulse" size={16} />
+                    <span>2027학년도 6월 모의고사 해설 영상 보러가기</span>
+                    <Icons.ArrowUpRight size={13} className="opacity-70 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  </a>
+                </div>
+
                 <div className="bg-zinc-950/60 border border-zinc-850 p-4 rounded-lg text-left space-y-1.5">
                   <span className="text-[10px] font-bold text-zinc-500 block uppercase tracking-wider">주요 제공 예정 서비스</span>
                   <div className="text-xs text-zinc-300 space-y-1">
@@ -1232,6 +1376,21 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
                 </span>
                 <Icons.ChevronRight size={16} className="opacity-50" />
               </button>
+
+              <button 
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setShowBoardPopup(true);
+                }}
+                className="py-3 text-lg font-bold border-b border-zinc-900 text-rose-350 hover:text-rose-300 flex items-center justify-between"
+                style={{ color: theme.primaryColor }}
+              >
+                <span className="flex items-center gap-2">
+                  공부 질문 게시판
+                  <Icons.LockKeyhole size={14} className="opacity-85 animate-pulse" />
+                </span>
+                <Icons.ChevronRight size={16} className="opacity-50" />
+              </button>
             </div>
 
             {/* 하단 CTA & SNS 연동 */}
@@ -1266,6 +1425,434 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection }: Previe
                   </a>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* -------------------- 공부 질문 게시판 (Q&A Board) 팝업 -------------------- */}
+        {showBoardPopup && (
+          <div 
+            className={`${viewMode === 'desktop' ? 'fixed' : 'absolute'} inset-0 bg-black/90 backdrop-blur-sm flex items-start md:items-center justify-center p-4 pt-10 md:pt-4 z-50 overflow-y-auto animate-fade-in`}
+            onClick={() => {
+              setShowBoardPopup(false);
+              setSelectedBoardPost(null);
+              setIsUnlocked(false);
+              setIsCreatingPost(false);
+              setIsEditingPost(false);
+              setBoardPostFormError('');
+            }}
+          >
+            <div 
+              className="w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col max-h-[92%] shadow-2xl relative"
+              style={{ fontFamily: theme.fontFamily === 'serif' ? 'Georgia, Cambria, serif' : 'system-ui, sans-serif' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 상단 포인트 테마 데코바 */}
+              <div className="h-1.5 w-full shrink-0" style={{ backgroundColor: theme.primaryColor }} />
+
+              {/* 우측 상단 X 닫기 버튼 */}
+              <button 
+                onClick={() => {
+                  setShowBoardPopup(false);
+                  setSelectedBoardPost(null);
+                  setIsUnlocked(false);
+                  setIsCreatingPost(false);
+                  setIsEditingPost(false);
+                  setBoardPostFormError('');
+                }}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white bg-zinc-850 hover:bg-zinc-800 p-2.5 rounded-full transition-all z-10"
+              >
+                <Icons.X size={16} />
+              </button>
+
+              {/* 팝업 성공 토스트 */}
+              {boardSuccessToast && (
+                <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-zinc-950 border border-emerald-500/30 text-emerald-400 px-4 py-2.5 rounded-lg text-xs font-bold shadow-2xl z-50 flex items-center gap-2 animate-bounce">
+                  <Icons.CheckCircle size={14} className="text-emerald-400 animate-pulse" />
+                  <span>{boardSuccessToast}</span>
+                </div>
+              )}
+
+              {/* 1. 글 작성 폼 (신규 생성 또는 기존 수정) */}
+              {(isCreatingPost || isEditingPost) ? (
+                <form 
+                  onSubmit={isCreatingPost ? handleCreatePost : handleEditPost} 
+                  className="flex flex-col overflow-y-auto"
+                >
+                  <div className="p-6 md:p-8 border-b border-zinc-800 bg-zinc-900">
+                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-rose-300 animate-pulse" style={{ color: theme.primaryColor }}>
+                      {isCreatingPost ? 'New Q&A Inquiry' : 'Edit Inquiry'}
+                    </span>
+                    <h2 className="text-xl font-bold text-white mt-1">
+                      {isCreatingPost ? '공부 질문 등록하기' : '질문 수정하기'}
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                      학교 내신 준비, 특강 수강 문의, 모의고사 교재 관련 공부법 등 어떤 것이든 자유롭게 질문해 주세요. <br />
+                      <strong className="text-rose-300" style={{ color: theme.primaryColor }}>작성자 개인정보와 질문 보호를 위해 전체 질문글은 자동으로 비밀 처리됩니다.</strong>
+                    </p>
+                  </div>
+
+                  <div className="p-6 md:p-8 space-y-4 overflow-y-auto max-h-[450px]">
+                    {boardPostFormError && (
+                      <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-xs font-bold leading-normal">
+                        ⚠️ {boardPostFormError}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] uppercase tracking-wider text-zinc-400 font-bold mb-1.5">이름 (작성자명) <span className="text-rose-500">*</span></label>
+                        <input 
+                          type="text" 
+                          required
+                          value={boardPostName}
+                          onChange={(e) => setBoardPostName(e.target.value)}
+                          placeholder="실명 혹은 마스킹 필명 입력" 
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-450 focus:ring-1 focus:ring-rose-450"
+                        />
+                      </div>
+                      
+                      {isCreatingPost ? (
+                        <div>
+                          <label className="block text-[11px] uppercase tracking-wider text-zinc-400 font-bold mb-1.5">글 관리용 비밀번호 <span className="text-rose-500">*</span></label>
+                          <input 
+                            type="password" 
+                            required
+                            value={boardPostPassword}
+                            onChange={(e) => setBoardPostPassword(e.target.value)}
+                            placeholder="열람/수정/삭제용 (4자리 이상)" 
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-450 focus:ring-1 focus:ring-rose-450"
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-[11px] uppercase tracking-wider text-zinc-550 font-bold mb-1.5">비밀번호 잠금 활성</label>
+                          <div className="bg-zinc-950 border border-zinc-850 rounded px-3 py-2 text-xs text-zinc-500 font-semibold cursor-not-allowed flex items-center gap-1">
+                            <Icons.Lock size={12} />
+                            <span>최초 비밀번호 고정 유지</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wider text-zinc-400 font-bold mb-1.5">답변 알림용 이메일 <span className="text-rose-500">*</span></label>
+                      <input 
+                        type="email" 
+                        required
+                        value={boardPostEmail}
+                        onChange={(e) => setBoardPostEmail(e.target.value)}
+                        placeholder="예: user@example.com" 
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-450 focus:ring-1 focus:ring-rose-450"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wider text-zinc-400 font-bold mb-1.5">질문 제목 <span className="text-rose-500">*</span></label>
+                      <input 
+                        type="text" 
+                        required
+                        value={boardPostTitle}
+                        onChange={(e) => setBoardPostTitle(e.target.value)}
+                        placeholder="질문을 아우르는 제목을 간결하게 작성해 주세요" 
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-450 focus:ring-1 focus:ring-rose-450"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wider text-zinc-400 font-bold mb-1.5">구체적인 공부 질문 내용 <span className="text-rose-500">*</span></label>
+                      <textarea 
+                        required
+                        rows={4}
+                        value={boardPostContent}
+                        onChange={(e) => setBoardPostContent(e.target.value)}
+                        placeholder="질문 또는 상담 내용을 상세히 적어주세요. 교재 애로 사항, 목표 학과, 평균 지선 등급 수준 정보 등을 자세히 남겨 주시면 훨씬 정밀한 1:1 맞춤형 피드백을 전달드릴 수 있습니다." 
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-xs text-white focus:outline-none focus:border-rose-450 focus:ring-1 focus:ring-rose-450 leading-relaxed resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-zinc-950/80 border-t border-zinc-800 flex items-center justify-end gap-3 shrink-0">
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setIsCreatingPost(false);
+                        setIsEditingPost(false);
+                        setBoardPostFormError('');
+                      }}
+                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-750 text-white rounded text-xs font-bold transition-all"
+                    >
+                      취소
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="px-5 py-2 font-bold rounded text-xs text-black transition-all flex items-center gap-1.5"
+                      style={{ backgroundColor: theme.primaryColor }}
+                    >
+                      <Icons.Check size={14} />
+                      <span>{isCreatingPost ? '등록하기' : '수정 완료'}</span>
+                    </button>
+                  </div>
+                </form>
+              ) : selectedBoardPost ? (
+                /* 2. 비밀번호 인증창 또는 상세 열람 레이아웃 */
+                !isUnlocked ? (
+                  <div className="p-6 md:p-8 flex flex-col items-center justify-center text-center py-12">
+                    <div className="p-4 bg-zinc-800 mb-4 rounded-full text-rose-300" style={{ color: theme.primaryColor, backgroundColor: `${theme.primaryColor}10` }}>
+                      <Icons.LockKeyhole size={36} className="animate-pulse" />
+                    </div>
+                    <h3 className="text-base font-bold text-white mb-2">🔒 비밀번호 확인 필요</h3>
+                    <p className="text-xs text-zinc-400 max-w-sm mb-6 leading-relaxed">
+                      이 게시글은 작성자와 학교 관리 기밀 보장을 위해 비밀글로 설정되어 있습니다. 글 작성 시 지정했던 비밀번호를 입력해 주십시오.
+                    </p>
+
+                    <div className="w-full max-w-xs space-y-3">
+                      <input 
+                        type="password"
+                        value={boardPasswordInput}
+                        onChange={(e) => {
+                          setBoardPasswordInput(e.target.value);
+                          setBoardPasswordError('');
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            if (boardPasswordInput === selectedBoardPost.passwordHash) {
+                              setIsUnlocked(true);
+                            } else {
+                              setBoardPasswordError('비밀번호가 일치하지 않습니다.');
+                            }
+                          }
+                        }}
+                        placeholder="이 질문에 설정한 비밀번호 입력"
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-center text-xs text-white focus:outline-none focus:border-rose-450 focus:ring-1 focus:ring-rose-450"
+                        autoFocus
+                      />
+                      
+                      {boardPasswordError && (
+                        <p className="text-[10px] text-red-400 font-bold">{boardPasswordError}</p>
+                      )}
+
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => {
+                            setSelectedBoardPost(null);
+                            setBoardPasswordInput('');
+                            setBoardPasswordError('');
+                          }}
+                          className="flex-1 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-white rounded text-[11px] font-bold transition-all"
+                        >
+                          취소
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (boardPasswordInput === selectedBoardPost.passwordHash) {
+                              setIsUnlocked(true);
+                            } else {
+                              setBoardPasswordError('비밀번호가 일치하지 않습니다. 다시 입력해 주세요.');
+                            }
+                          }}
+                          className="flex-1 py-1.5 text-black font-extrabold rounded text-[11px] transition-all"
+                          style={{ backgroundColor: theme.primaryColor }}
+                        >
+                          해제 및 읽기
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* 3. 해제 상태 상세글 상세 열람 레이아웃 */
+                  <div className="flex flex-col overflow-y-auto">
+                    <div className="p-6 md:p-8 bg-zinc-900 border-b border-zinc-800">
+                      <div className="flex justify-between items-start gap-4">
+                        <span className="bg-rose-500/10 text-rose-400 text-[9px] px-2 py-0.5 rounded border border-rose-500/20 font-bold uppercase tracking-wider">
+                          🔒 SECURE BOARD POST
+                        </span>
+                        <span className="text-[10px] text-zinc-500 font-mono">{selectedBoardPost.createdAt}</span>
+                      </div>
+                      
+                      <h3 className="text-lg font-bold text-white mt-3 leading-snug">
+                        {selectedBoardPost.title}
+                      </h3>
+
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-4 text-[10px] text-zinc-400 font-mono">
+                        <div>작성자: <span className="text-zinc-200 font-semibold">{selectedBoardPost.author}</span></div>
+                        <span className="text-zinc-700">|</span>
+                        <div>이메일: <span className="text-zinc-200 font-semibold">{selectedBoardPost.email}</span></div>
+                      </div>
+                    </div>
+
+                    <div className="p-6 md:p-8 space-y-6 overflow-y-auto max-h-[380px]">
+                      {/* 질문 본문 */}
+                      <div className="space-y-2">
+                        <h4 className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">상담 및 질문 상세 내용</h4>
+                        <div className="bg-zinc-950 p-4 rounded-lg text-xs leading-relaxed text-zinc-300 whitespace-pre-wrap border border-zinc-850">
+                          {selectedBoardPost.content}
+                        </div>
+                      </div>
+
+                      {/* 학원 공식 답변 */}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5 text-[10px] font-black uppercase text-zinc-500 tracking-wider">
+                          <Icons.Sparkles size={11} className="text-rose-350" style={{ color: theme.primaryColor }} />
+                          <span className="text-rose-300" style={{ color: theme.primaryColor }}>VOLLMOND ACADEMY 1:1 맞춤 답변</span>
+                        </div>
+                        <div className="bg-rose-500/5 p-4 rounded-lg text-xs leading-relaxed text-zinc-300 whitespace-pre-wrap border" style={{ borderColor: `${theme.primaryColor}15` }}>
+                          <div className="font-bold mb-1.5 text-white flex items-center gap-1" style={{ color: theme.primaryColor }}>
+                            <Icons.Award size={13} />
+                            <span>전략 교수단 공식 소견</span>
+                          </div>
+                          {selectedBoardPost.replies || "안녕하세요! 상기 질문에 대한 전략 교수팀의 1:1 피드백이 준비되고 있습니다. 업무일 기준 24시간 이내에 이곳에 상세한 수강 및 솔루션 코칭 답변이 기재됩니다."}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 제어 하단 바 */}
+                    <div className="p-4 bg-zinc-950 border-t border-zinc-800 flex justify-between items-center shrink-0">
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => {
+                            setBoardPostName(selectedBoardPost.author);
+                            setBoardPostEmail(selectedBoardPost.email);
+                            setBoardPostTitle(selectedBoardPost.title);
+                            setBoardPostContent(selectedBoardPost.content);
+                            setBoardPostPassword(selectedBoardPost.passwordHash);
+                            setIsEditingPost(true);
+                          }}
+                          className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white rounded text-[11px] font-bold transition-all animate-pulse"
+                        >
+                          수정하기
+                        </button>
+                        <button 
+                          onClick={() => handleDeletePost(selectedBoardPost.id)}
+                          className="px-3 py-1.5 bg-red-950/20 border border-red-950/40 text-red-400 hover:bg-red-900/10 rounded text-[11px] font-bold transition-all"
+                        >
+                          삭제하기
+                        </button>
+                      </div>
+
+                      <button 
+                        onClick={() => {
+                          setSelectedBoardPost(null);
+                          setIsUnlocked(false);
+                          setBoardPasswordInput('');
+                        }}
+                        className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-white rounded text-[11px] font-bold transition-all"
+                      >
+                        목록으로 가기
+                      </button>
+                    </div>
+                  </div>
+                )
+              ) : (
+                /* 4. 기본 공부 질문 목록화 레이아웃 */
+                <div className="flex flex-col overflow-hidden h-[540px]">
+                  <div className="p-6 md:p-8 bg-zinc-900 border-b border-zinc-800 shrink-0">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold tracking-widest text-[#FFB2A7]" style={{ color: theme.primaryColor }}>
+                          Q&A STUDY BOARD
+                        </span>
+                        <h2 className="text-xl font-bold text-white mt-0.5">공부 질문 게시판 🔒</h2>
+                      </div>
+                      
+                      <button 
+                        onClick={() => {
+                          setBoardPostName('');
+                          setBoardPostPassword('');
+                          setBoardPostEmail('');
+                          setBoardPostTitle('');
+                          setBoardPostContent('');
+                          setBoardPostFormError('');
+                          setIsCreatingPost(true);
+                        }}
+                        className="px-3.5 py-1.5 rounded text-xs text-black font-extrabold flex items-center gap-1 hover:brightness-110 active:scale-95 transition-all"
+                        style={{ backgroundColor: theme.primaryColor }}
+                      >
+                        <Icons.Plus size={14} strokeWidth={2.5} />
+                        <span>질문 남기기</span>
+                      </button>
+                    </div>
+                    
+                    <p className="text-[11px] text-zinc-400 mt-2.5 leading-relaxed">
+                      💡 질문 보호를 위해 <span className="font-semibold text-rose-300" style={{ color: theme.primaryColor }}>모든 질문은 비밀글</span>로만 저장됩니다. <br />
+                      목록에서 질문을 누르고 작성 비밀번호를 입력하면 질문 상세 글과 학원의 특화 1:1 맞춤 피드백을 확인할 수 있습니다!
+                    </p>
+                  </div>
+
+                  {/* 공부 게시글 리스트 영역 */}
+                  <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-3">
+                    <div className="p-2.5 rounded bg-amber-500/5 text-amber-300 border border-amber-500/10 text-[10px] leading-relaxed select-none">
+                      🔑 <strong>체험 가이드 안내:</strong> 최초 등록되어 있는 3개의 실전 예제 질문은 공부 및 수강 질문 예제입니다. <br />
+                      각 질문의 비밀번호는 각각 <strong>'1234'</strong>, <strong>'2026'</strong>, <strong>'1111'</strong> 이니 직접 입력하며 비밀글 열람 기능을 체험해 보세요! (새 질문 등록 시에는 원하는 비밀번호 설정 가능)
+                    </div>
+
+                    {(data.boardPosts || []).length === 0 ? (
+                      <div className="text-center py-12 text-zinc-500 space-y-2">
+                        <Icons.HelpCircle size={30} className="mx-auto opacity-30" />
+                        <p className="text-xs">등록된 공부 질문사항이 없습니다.</p>
+                        <p className="text-[10px]">첫 번째 공부 비밀 질문의 주인공이 되어보세요!</p>
+                      </div>
+                    ) : (
+                      (data.boardPosts || []).map((post) => {
+                        const formatAuthor = (name: string) => {
+                          if (name.length <= 1) return name;
+                          if (name.length === 2) return name[0] + '*';
+                          return name[0] + '*'.repeat(name.length - 2) + name[name.length - 1];
+                        };
+                        
+                        return (
+                          <div 
+                            key={post.id}
+                            onClick={() => {
+                              setSelectedBoardPost(post);
+                              setIsUnlocked(false);
+                              setBoardPasswordInput('');
+                              setBoardPasswordError('');
+                            }}
+                            className="bg-zinc-950 hover:bg-zinc-900 border border-zinc-850 hover:border-zinc-800 transition-all p-3.5 rounded-lg flex justify-between items-center gap-4 cursor-pointer group"
+                          >
+                            <div className="space-y-1 w-[80%]">
+                              <div className="flex items-center gap-1.5">
+                                <Icons.Lock size={12} className="text-zinc-500 shrink-0 group-hover:text-amber-500 transition-colors" />
+                                <span className="text-xs text-zinc-400 group-hover:text-zinc-200 transition-colors line-clamp-1">
+                                  {post.title}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-[10px] text-zinc-650 font-mono">
+                                <span className="text-zinc-500 font-sans">{formatAuthor(post.author)}</span>
+                                <span>•</span>
+                                <span>{post.createdAt}</span>
+                              </div>
+                            </div>
+
+                            <div className="shrink-0 flex items-center">
+                              {post.replies ? (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/15 font-bold uppercase">
+                                  답변완료
+                                </span>
+                              ) : (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 border border-zinc-700/50 font-bold uppercase">
+                                  답변대기
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* 하단 단축 닫기 바 */}
+                  <div className="p-4 bg-zinc-950 border-t border-zinc-800 shrink-0 flex justify-end">
+                    <button 
+                      onClick={() => setShowBoardPopup(false)}
+                      className="px-6 py-2.5 bg-zinc-850 hover:bg-zinc-800 text-white rounded text-xs font-bold transition-all"
+                    >
+                      닫기
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
