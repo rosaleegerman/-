@@ -44,10 +44,11 @@ service cloud.firestore {
       allow list: if isAdmin();
 
       // Create profile during signup
-      // Prevent self-assignment of admin/teacher roles.
+      // Prevent self-assignment of admin/teacher roles unless verified owner.
       allow create: if isSignedIn() && isOwner(userId) && (
         request.resource.data.role == 'student' || 
-        request.resource.data.role == 'guest'
+        request.resource.data.role == 'guest' ||
+        (request.resource.data.role == 'admin' && (request.auth.token.email == 'rosa.lee.german@gmail.com' || request.auth.token.email == 'spitze.deutsch@gmail.com'))
       ) &&
       request.resource.data.email == request.auth.token.email &&
       request.resource.data.name is string && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 60 &&

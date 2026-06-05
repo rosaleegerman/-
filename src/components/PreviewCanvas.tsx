@@ -329,7 +329,8 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
         if (err.code === 'auth/email-already-in-use') {
           setAuthError('이미 가입된 이메일 주소입니다.');
         } else if (err.code === 'auth/operation-not-allowed') {
-          setAuthError('이메일/비밀번호 가입 기능이 Firebase Auth에서 아직 활성화되지 않았습니다. Firebase 콘솔(https://console.firebase.google.com/project/serious-ratio-gf4nj/authentication/providers)에 방문해 "이메일/비밀번호" 로그인을 활성화하시거나 아래의 Google 간편 가입을 사용해 주세요.');
+          const prjId = auth.app.options.projectId || 'vollmond-251b3';
+          setAuthError(`이메일/비밀번호 가입 기능이 Firebase Auth에서 아직 활성화되지 않았습니다. Firebase 콘솔(https://console.firebase.google.com/project/${prjId}/authentication/providers)에 방문해 "이메일/비밀번호" 로그인을 활성화하시거나 아래의 Google 간편 가입을 사용해 주세요.`);
         } else {
           setAuthError(`회원가입 실패: ${err.message}`);
         }
@@ -348,20 +349,20 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
       const userDocRef = doc(db, 'users', user.uid);
       const docSnap = await getDoc(userDocRef);
       const userEmail = (user.email || '').trim().toLowerCase();
-      const isAdminEmail = userEmail === 'rosa.lee.german@gmail.com';
+      const isAdminEmail = userEmail === 'rosa.lee.german@gmail.com' || userEmail === 'spitze.deutsch@gmail.com';
       
       if (!docSnap.exists()) {
         const defaultName = user.displayName && user.displayName.length >= 2 ? user.displayName : '구글 사용자';
         const newUser: HomeUser = {
           email: user.email || '',
           passwordHash: 'google-oauth',
-          name: isAdminEmail ? '원장 (관리자)' : defaultName,
+          name: isAdminEmail ? '대표 원장 (관리자)' : defaultName,
           role: isAdminEmail ? 'admin' : 'student',
           phone: '010-0000-0000'
         };
         await setDoc(userDocRef, newUser);
       } else if (isAdminEmail && docSnap.data()?.role !== 'admin') {
-        // Upgrade existing document to admin if logged in via Google sign-in with your authorized developer address
+        // Upgrade existing document to admin if logged in via Google sign-in with your authorized address
         await updateDoc(userDocRef, { role: 'admin' });
       }
       
