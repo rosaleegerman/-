@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WebsiteData, DeviceViewMode, CMSPost, BoardPost } from '../types';
 import * as Icons from 'lucide-react';
 import defaultHeroImage from '../../public/assets/images/blue_sky_moon_1779892119976.png';
@@ -23,6 +23,14 @@ const DynamicIcon = ({ name, className, color }: { name: string; className?: str
   return <IconComponent className={className} style={{ color }} size={20} />;
 };
 
+export interface HomeUser {
+  email: string;
+  passwordHash: string;
+  name: string;
+  role: 'admin' | 'teacher' | 'student' | 'guest'; // 관리자, 선생님, 학생, 학부모 및 일반인
+  phone?: string; // 휴대폰 번호
+}
+
 export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdateData }: PreviewCanvasProps) {
   const { theme, hero, features, contact, posts, seo } = data;
   const [selectedPost, setSelectedPost] = useState<CMSPost | null>(null);
@@ -33,6 +41,86 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [activeCourseTab, setActiveCourseTab] = useState<'regular' | 'certificate'>('regular');
   
+  // --- [회원가입제 회원 관리 데이터 및 상태] ---
+  const [registeredUsers, setRegisteredUsers] = useState<HomeUser[]>(() => {
+    try {
+      const saved = localStorage.getItem('vollmond_registered_users');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    // 기본 체험형 데모 계정 제공 (사용자가 테스트하기 쉽도록)
+    return [
+      {
+        email: 'spitze.deutsch@gmail.com',
+        passwordHash: 'Rofh5454',
+        name: '대표 원장님 (관리자)',
+        role: 'admin',
+        phone: '010-0000-0000'
+      },
+      {
+        email: 'teacher.kim@vollmond.co.kr',
+        passwordHash: 'teacher1234',
+        name: '김전략 선생님 (강사)',
+        role: 'teacher',
+        phone: '010-1234-5678'
+      },
+      {
+        email: 'student@vollmond.co.kr',
+        passwordHash: 'student1234',
+        name: '홍길동 학생',
+        role: 'student',
+        phone: '010-9876-5432'
+      }
+    ];
+  });
+
+  const [currentUser, setCurrentUser] = useState<HomeUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('vollmond_current_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authPhone, setAuthPhone] = useState(''); // 휴대폰 번호 입력을 위한 상태
+  const [authRole, setAuthRole] = useState<'student' | 'guest'>('student'); // 새로 가입하는 이들은 'student', 'guest'만 자동/기본 가입 지원
+  const [authCode, setAuthCode] = useState(''); // 예: vollmond-admin, vollmond-teacher (비사용되지만 남겨둠)
+  const [authError, setAuthError] = useState('');
+  const [authSuccessMsg, setAuthSuccessMsg] = useState('');
+
+  // --- [회원 등급 및 강퇴 관리자 센터 상태 및 로직] ---
+  const [showUserAdminModal, setShowUserAdminModal] = useState(false);
+
+  const handleUpdateUserRole = (email: string, newRole: 'admin' | 'teacher' | 'student' | 'guest') => {
+    setRegisteredUsers(prev => prev.map(u => {
+      if (u.email.toLowerCase() === email.toLowerCase()) {
+        const updated = { ...u, role: newRole };
+        if (currentUser && currentUser.email.toLowerCase() === email.toLowerCase()) {
+          setCurrentUser(updated);
+        }
+        return updated;
+      }
+      return u;
+    }));
+  };
+
+  const handleKickUser = (email: string) => {
+    if (currentUser && currentUser.email.toLowerCase() === email.toLowerCase()) {
+      alert('본인 계정은 스스로 강퇴할 수 없습니다.');
+      return;
+    }
+    if (window.confirm(`정말 해당 회원을 즉시 탈퇴(강퇴)시키겠습니까?\n이메일: ${email}`)) {
+      setRegisteredUsers(prev => prev.filter(u => u.email.toLowerCase() !== email.toLowerCase()));
+    }
+  };
+
   // 공부 질문 게시판 (Q&A Board) 관련 상태
   const [showBoardPopup, setShowBoardPopup] = useState(false);
   const [selectedBoardPost, setSelectedBoardPost] = useState<BoardPost | null>(null);
@@ -50,12 +138,120 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   const [boardPostContent, setBoardPostContent] = useState('');
   const [boardPostFormError, setBoardPostFormError] = useState('');
   const [boardSuccessToast, setBoardSuccessToast] = useState('');
+
+  // 답변 피드백을 실시간으로 입력/저장하기 위한 상태
+  const [boardReplyInput, setBoardReplyInput] = useState('');
   
   // 문의 양식 서브밋 상태 모의 테스트용
   const [inquiryName, setInquiryName] = useState('');
   const [inquiryEmail, setInquiryEmail] = useState('');
   const [inquiryMessage, setInquiryMessage] = useState('');
   const [formSubmitted, setFormSubmitted] = useState(false);
+
+  // 로컬 영속성 싱크
+  useEffect(() => {
+    localStorage.setItem('vollmond_registered_users', JSON.stringify(registeredUsers));
+  }, [registeredUsers]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('vollmond_current_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('vollmond_current_user');
+    }
+  }, [currentUser]);
+
+  const handleAuthSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthSuccessMsg('');
+
+    if (authMode === 'login') {
+      const user = registeredUsers.find(
+        u => u.email.trim().toLowerCase() === authEmail.trim().toLowerCase() && u.passwordHash === authPassword
+      );
+      if (!user) {
+        setAuthError('이메일 주소 또는 비밀번호가 일치하지 않습니다.');
+        return;
+      }
+      setCurrentUser(user);
+      setAuthSuccessMsg(`✓ ${user.name}님, 환영합니다!`);
+      setTimeout(() => {
+        setShowAuthModal(false);
+        setAuthSuccessMsg('');
+        setAuthEmail('');
+        setAuthPassword('');
+      }, 1200);
+    } else {
+      if (!authEmail || !authPassword || !authName || !authPhone) {
+        setAuthError('모든 양식 필드(이름, 휴대폰 번호 포함)를 완전히 기재해 주세요.');
+        return;
+      }
+      
+      const nameTrim = authName.trim();
+      if (nameTrim.length < 2) {
+        setAuthError('정확한 실명을 입력해 주십시오 (최소 2자 이상).');
+        return;
+      }
+      const nameRegex = /^[가-힣a-zA-Z\s]{2,15}$/;
+      if (!nameRegex.test(nameTrim)) {
+        setAuthError('이름은 실명으로 정확히 입력해 주세요. (특수문자 및 숫자 불가)');
+        return;
+      }
+
+      const cleanedPhone = authPhone.trim();
+      if (cleanedPhone.length < 9) {
+        setAuthError('올바른 휴대폰 번호를 전용 양식에 맞추어 정확하게 입력해 주십시오.');
+        return;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(authEmail)) {
+        setAuthError('유효하지 않은 이메일 형식입니다.');
+        return;
+      }
+      if (authPassword.length < 4) {
+        setAuthError('비밀번호는 최소 4자 이상으로 설정해 주세요.');
+        return;
+      }
+      const isExist = registeredUsers.some(
+        u => u.email.trim().toLowerCase() === authEmail.trim().toLowerCase()
+      );
+      if (isExist) {
+        setAuthError('해당 이메일 주소는 이미 가입되어 있습니다.');
+        return;
+      }
+
+      const newUser: HomeUser = {
+        email: authEmail.trim(),
+        passwordHash: authPassword,
+        name: nameTrim,
+        role: authRole as 'student' | 'guest',
+        phone: cleanedPhone
+      };
+
+      setRegisteredUsers(prev => [...prev, newUser]);
+      setCurrentUser(newUser);
+      setAuthSuccessMsg(`✓ 회원가입이 성공적으로 완료 및 자동 로그인되었습니다!`);
+      setTimeout(() => {
+        setShowAuthModal(false);
+        setAuthSuccessMsg('');
+        setAuthEmail('');
+        setAuthPassword('');
+        setAuthName('');
+        setAuthCode('');
+        setAuthPhone('');
+      }, 1200);
+    }
+  };
+
+  const handleLogout = () => {
+    if (window.confirm('정말 로그아웃 하시겠습니까?')) {
+      setCurrentUser(null);
+      setSelectedBoardPost(null);
+      setIsUnlocked(false);
+    }
+  };
 
   const handleInquirySubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,27 +270,30 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   // 공부 질문 게시판 포스트 처리 함수군 (완벽 작동 기획)
   const handleCreatePost = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!boardPostName || !boardPostPassword || !boardPostEmail || !boardPostTitle || !boardPostContent) {
-      setBoardPostFormError('모든 양식 필드를 누락 없이 입력해 주세요.');
+    if (!currentUser) {
+      setBoardPostFormError('질문을 등록하려면 먼저 로그인해 주십시오.');
       return;
     }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(boardPostEmail)) {
-      setBoardPostFormError('유효한 이메일 주소 형식을 입력해 주세요.');
+    if (currentUser.role !== 'student' && currentUser.role !== 'guest') {
+      setBoardPostFormError('질문 등록은 학생 및 학부모/일반인 등급만 가능합니다. (관리자 및 선생님은 답변 전용)');
       return;
     }
-    if (boardPostPassword.length < 4) {
-      setBoardPostFormError('비밀번호는 수정 및 삭제 관리를 위해 최소 4자리 이상으로 설정해 주세요.');
+    if (!boardPostTitle || !boardPostContent) {
+      setBoardPostFormError('제목과 구체적인 공부 질문 내용을 누락 없이 입력해 주세요.');
+      return;
+    }
+    if (boardPostPassword && boardPostPassword.length < 4) {
+      setBoardPostFormError('게시글 보완을 위해 비밀번호물은 최소 4자리 이상으로 지정해 주십시오.');
       return;
     }
 
     const newPost: BoardPost = {
       id: `board-${Date.now()}`,
       title: boardPostTitle,
-      author: boardPostName,
-      email: boardPostEmail,
+      author: currentUser.name,
+      email: currentUser.email,
       content: boardPostContent,
-      passwordHash: boardPostPassword,
+      passwordHash: boardPostPassword || '1111', // 수동 비밀번호 없으면 기본 1111 지정
       createdAt: new Date().toISOString().split('T')[0],
       replies: "안녕하세요! 폴몬트 에듀 개별 밀착 Q&A 게시판에 상세 질문을 전송해 주셔서 감사합니다. 기재하여 주신 연락처와 본 비밀글 답변창을 통해 담당 학과별 입시 전략 전담 선생님께서 24시간 이내에 꼼꼼한 심층 맞춤 답변 및 다음 수강 전 레벨 평가 안내 가이드를 전달할 예정입니다! 조금만 대기 요망 드립니다."
     };
@@ -123,21 +322,14 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   const handleEditPost = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBoardPost) return;
-    if (!boardPostName || !boardPostEmail || !boardPostTitle || !boardPostContent) {
+    if (!boardPostTitle || !boardPostContent) {
       setBoardPostFormError('수정할 필드가 비어있을 수 없습니다.');
-      return;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(boardPostEmail)) {
-      setBoardPostFormError('유효한 이메일 주소 형식을 입력해 주세요.');
       return;
     }
 
     const updatedPost: BoardPost = {
       ...selectedBoardPost,
       title: boardPostTitle,
-      author: boardPostName,
-      email: boardPostEmail,
       content: boardPostContent,
     };
 
@@ -330,6 +522,61 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
           </nav>
 
           <div className="flex items-center gap-3">
+            {/* 인증 (로그인/가입) 상태 */}
+            <div className="hidden md:flex items-center gap-2">
+              {currentUser ? (
+                <div className="flex items-center gap-2 bg-zinc-950/80 border border-zinc-850 px-2.5 py-1 rounded-md text-xs leading-none select-none">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-zinc-300 font-bold max-w-[80px] truncate">{currentUser.name}</span>
+                  <span className="text-[9px] px-1 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20 font-extrabold uppercase shrink-0 scale-90">
+                    {currentUser.role === 'admin' ? '관리자' : currentUser.role === 'teacher' ? '선생님' : currentUser.role === 'student' ? '학생' : '학부모'}
+                  </span>
+                  {currentUser.role === 'admin' && (
+                    <button 
+                      onClick={() => setShowUserAdminModal(true)}
+                      className="ml-1 text-[9px] text-amber-400 hover:text-amber-300 font-extrabold transition-colors border-l border-zinc-800 pl-2 cursor-pointer flex items-center gap-0.5"
+                      title="가입 회원 등급 및 강퇴 관리"
+                    >
+                      <Icons.Users size={10} />
+                      <span>회원관리</span>
+                    </button>
+                  )}
+                  <button 
+                    onClick={handleLogout}
+                    className="ml-1 text-[9px] text-zinc-500 hover:text-rose-400 font-extrabold transition-colors border-l border-zinc-800 pl-2 cursor-pointer"
+                    title="로그아웃"
+                  >
+                    로그아웃
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 bg-zinc-950/40 px-2 py-1 rounded-md border border-zinc-900">
+                  <button 
+                    onClick={() => {
+                      setAuthMode('login');
+                      setAuthError('');
+                      setAuthSuccessMsg('');
+                      setShowAuthModal(true);
+                    }}
+                    className="text-[11px] px-2 py-1 font-bold text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    로그인
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setAuthMode('register');
+                      setAuthError('');
+                      setAuthSuccessMsg('');
+                      setShowAuthModal(true);
+                    }}
+                    className="text-[11px] px-2 py-1 font-bold text-rose-300 hover:text-white transition-colors bg-rose-500/5 rounded cursor-pointer border border-rose-500/10"
+                  >
+                    회원가입
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* 소셜 퀵 연동 */}
             <div className="flex items-center gap-2">
               {seo.instagramLink && (
@@ -1395,6 +1642,70 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
 
             {/* 하단 CTA & SNS 연동 */}
             <div className="mt-auto max-w-sm mx-auto w-full space-y-6">
+              {/* 모바일 전용 회원 상태 및 로그인/가입 제어 */}
+              <div className="py-4 border-t border-zinc-900 flex flex-col gap-2">
+                {currentUser ? (
+                  <div className="flex flex-col gap-2 bg-zinc-900 border border-zinc-800 p-3 rounded-lg text-xs leading-normal select-none">
+                    <div className="flex justify-between items-center w-full">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-zinc-300 font-bold">{currentUser.name} (로그인 중)</span>
+                      </div>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20 font-extrabold uppercase shrink-0">
+                        {currentUser.role === 'admin' ? '관리자' : currentUser.role === 'teacher' ? '선생님' : currentUser.role === 'student' ? '학생' : '학부모'}
+                      </span>
+                    </div>
+                    {currentUser.role === 'admin' && (
+                      <button 
+                        onClick={() => {
+                          setShowMobileMenu(false);
+                          setShowUserAdminModal(true);
+                        }}
+                        className="w-full text-center text-xs py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-350 font-extrabold transition-colors border border-amber-500/20 rounded cursor-pointer mb-1"
+                      >
+                        👥 가입 회원 및 등급 관리자 센터
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => {
+                        setShowMobileMenu(false);
+                        handleLogout();
+                      }}
+                      className="w-full text-center text-xs py-2 bg-zinc-950 hover:bg-zinc-900 text-rose-400 font-extrabold transition-colors border border-zinc-850 rounded cursor-pointer"
+                    >
+                      로그아웃 하기
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button 
+                      onClick={() => {
+                        setShowMobileMenu(false);
+                        setAuthMode('login');
+                        setAuthError('');
+                        setAuthSuccessMsg('');
+                        setShowAuthModal(true);
+                      }}
+                      className="text-xs py-2.5 font-bold text-zinc-300 hover:text-white transition-colors bg-zinc-900 border border-zinc-800 rounded-lg text-center cursor-pointer"
+                    >
+                      로그인
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setShowMobileMenu(false);
+                        setAuthMode('register');
+                        setAuthError('');
+                        setAuthSuccessMsg('');
+                        setShowAuthModal(true);
+                      }}
+                      className="text-xs py-2.5 font-bold text-rose-300 hover:text-white transition-colors bg-rose-500/10 border border-rose-500/20 rounded-lg text-center cursor-pointer"
+                    >
+                      회원가입
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <button 
                 onClick={() => {
                   setShowMobileMenu(false);
@@ -1704,6 +2015,58 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                           {selectedBoardPost.replies || "안녕하세요! 상기 질문에 대한 전략 교수팀의 1:1 피드백이 준비되고 있습니다. 업무일 기준 24시간 이내에 이곳에 상세한 수강 및 솔루션 코칭 답변이 기재됩니다."}
                         </div>
                       </div>
+
+                      {/* 교직원 전용 피드백 에디팅 섹션 */}
+                      {currentUser && (currentUser.role === 'admin' || currentUser.role === 'teacher') && (
+                        <div className="bg-zinc-950 p-4 rounded-lg border border-rose-550/20 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h5 className="text-[10px] font-black uppercase text-rose-300 flex items-center gap-1" style={{ color: theme.primaryColor }}>
+                              <Icons.ShieldAlert size={12} />
+                              <span>[교직원 전용] 피드백 실시간 답변 에디터</span>
+                            </h5>
+                            <span className="text-[9px] text-zinc-500 font-mono">가집필인: {currentUser.name} ({currentUser.role === 'admin' ? '관리자' : '선생님'})</span>
+                          </div>
+                          
+                          <textarea
+                            rows={3}
+                            value={boardReplyInput}
+                            onChange={(e) => setBoardReplyInput(e.target.value)}
+                            placeholder="전략 교수단의 공식 피드백 내용을 정밀하게 집필해 주세요..."
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2.5 py-2 text-xs text-white focus:outline-none focus:border-rose-450 leading-relaxed resize-none"
+                          />
+                          
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!boardReplyInput.trim()) {
+                                  alert('답변 본문을 입력해 주세요.');
+                                  return;
+                                }
+                                const updatedPost: BoardPost = {
+                                  ...selectedBoardPost,
+                                  replies: boardReplyInput
+                                };
+                                const updatedPosts = (data.boardPosts || []).map(p => p.id === selectedBoardPost.id ? updatedPost : p);
+                                if (onUpdateData) {
+                                  onUpdateData({
+                                    ...data,
+                                    boardPosts: updatedPosts
+                                  });
+                                }
+                                setSelectedBoardPost(updatedPost);
+                                setBoardSuccessToast('✓ 1:1 맞춤 피드백을 실시간 업데이트 반영하였습니다!');
+                                setTimeout(() => setBoardSuccessToast(''), 3000);
+                              }}
+                              className="px-3.5 py-1.5 text-black font-extrabold rounded text-[10px] hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                              style={{ backgroundColor: theme.primaryColor }}
+                            >
+                              <Icons.Sparkles size={11} />
+                              <span>공식 피드백 즉시 업데이트</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* 제어 하단 바 */}
@@ -1757,15 +2120,27 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                       
                       <button 
                         onClick={() => {
-                          setBoardPostName('');
+                          if (!currentUser) {
+                            alert('공부 질문을 작성하시려면 먼저 로그인이 필요합니다.');
+                            setAuthMode('login');
+                            setAuthError('');
+                            setAuthSuccessMsg('');
+                            setShowAuthModal(true);
+                            return;
+                          }
+                          if (currentUser.role !== 'student' && currentUser.role !== 'guest') {
+                            alert(`죄송합니다. 질문 등록은 [학생] 또는 [학부모 & 일반인] 등급만 요청 가능합니다.\n현재 로그인된 [${currentUser.role === 'admin' ? '관리자' : '선생님'}] 계정은 질문 답변 전담 권한을 가집니다.`);
+                            return;
+                          }
+                          setBoardPostName(currentUser.name);
                           setBoardPostPassword('');
-                          setBoardPostEmail('');
+                          setBoardPostEmail(currentUser.email);
                           setBoardPostTitle('');
                           setBoardPostContent('');
                           setBoardPostFormError('');
                           setIsCreatingPost(true);
                         }}
-                        className="px-3.5 py-1.5 rounded text-xs text-black font-extrabold flex items-center gap-1 hover:brightness-110 active:scale-95 transition-all"
+                        className="px-3.5 py-1.5 rounded text-xs text-black font-extrabold flex items-center gap-1 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
                         style={{ backgroundColor: theme.primaryColor }}
                       >
                         <Icons.Plus size={14} strokeWidth={2.5} />
@@ -1775,16 +2150,12 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                     
                     <p className="text-[11px] text-zinc-400 mt-2.5 leading-relaxed">
                       💡 질문 보호를 위해 <span className="font-semibold text-rose-300" style={{ color: theme.primaryColor }}>모든 질문은 비밀글</span>로만 저장됩니다. <br />
-                      목록에서 질문을 누르고 작성 비밀번호를 입력하면 질문 상세 글과 학원의 특화 1:1 맞춤 피드백을 확인할 수 있습니다!
+                      일반 회원은 비밀번호 입력이 필요하나, <strong className="text-emerald-400">본인이 기획한 질문이나 선생님/관리자 등급은 로그인 즉시 완전 확인이 열립니다!</strong>
                     </p>
                   </div>
 
                   {/* 공부 게시글 리스트 영역 */}
                   <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-3">
-                    <div className="p-2.5 rounded bg-amber-500/5 text-amber-300 border border-amber-500/10 text-[10px] leading-relaxed select-none">
-                      🔑 <strong>체험 가이드 안내:</strong> 최초 등록되어 있는 3개의 실전 예제 질문은 공부 및 수강 질문 예제입니다. <br />
-                      각 질문의 비밀번호는 각각 <strong>'1234'</strong>, <strong>'2026'</strong>, <strong>'1111'</strong> 이니 직접 입력하며 비밀글 열람 기능을 체험해 보세요! (새 질문 등록 시에는 원하는 비밀번호 설정 가능)
-                    </div>
 
                     {(data.boardPosts || []).length === 0 ? (
                       <div className="text-center py-12 text-zinc-500 space-y-2">
@@ -1805,9 +2176,22 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                             key={post.id}
                             onClick={() => {
                               setSelectedBoardPost(post);
-                              setIsUnlocked(false);
                               setBoardPasswordInput('');
                               setBoardPasswordError('');
+                              
+                              // 만약 로그인된 회원이 관리자이거나 선생님이거나 원작성자(이메일 매칭)라면 비밀번호 통과!
+                              if (currentUser && (
+                                currentUser.role === 'admin' || 
+                                currentUser.role === 'teacher' || 
+                                currentUser.email.trim().toLowerCase() === post.email.trim().toLowerCase()
+                              )) {
+                                setIsUnlocked(true);
+                              } else {
+                                setIsUnlocked(false);
+                              }
+
+                              // 피드백 전용 답변 인풋 상태 동기화
+                              setBoardReplyInput(post.replies || '');
                             }}
                             className="bg-zinc-950 hover:bg-zinc-900 border border-zinc-850 hover:border-zinc-800 transition-all p-3.5 rounded-lg flex justify-between items-center gap-4 cursor-pointer group"
                           >
@@ -1853,6 +2237,323 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* -------------------- 통합 회원가입 및 로그인 모달 (인증제 필수 탑재) -------------------- */}
+        {showAuthModal && (
+          <div 
+            className={`${viewMode === 'desktop' ? 'fixed' : 'absolute'} inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-fade-in`}
+            onClick={() => {
+              setShowAuthModal(false);
+              setAuthError('');
+              setAuthSuccessMsg('');
+            }}
+          >
+            <div 
+              className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl relative p-6 md:p-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 상단 포인트 데코바 */}
+              <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: theme.primaryColor }} />
+
+              {/* 우측 상단 X 닫기 */}
+              <button 
+                onClick={() => {
+                  setShowAuthModal(false);
+                  setAuthError('');
+                  setAuthSuccessMsg('');
+                }}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white bg-zinc-850 hover:bg-zinc-800 p-2 rounded-full transition-all"
+              >
+                <Icons.X size={14} />
+              </button>
+
+              <div className="text-center mb-6">
+                <span className="text-[10px] uppercase tracking-wider font-extrabold" style={{ color: theme.primaryColor }}>
+                  {authMode === 'login' ? 'User Authentication' : 'Create New Account'}
+                </span>
+                <h3 className="text-lg font-bold text-white mt-1">
+                  {authMode === 'login' ? '폴몬트 에듀 통합 로그인' : '폴몬트 새 회원가입'}
+                </h3>
+                <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
+                  {authMode === 'login' 
+                    ? '가집필된 이메일 계정을 입력하여 Q&A 게시판을 제어해 보십시오.'
+                    : '회원 등급별 최적의 입시 코칭 환경을 즉시 세팅해 드립니다.'}
+                </p>
+              </div>
+
+              {authError && (
+                <div className="bg-red-500/10 border border-red-550/20 text-red-400 p-3 rounded-lg text-[11px] font-bold mb-4 leading-normal">
+                  ⚠️ {authError}
+                </div>
+              )}
+
+              {authSuccessMsg && (
+                <div className="bg-emerald-500/10 border border-emerald-550/20 text-emerald-400 p-3 rounded-lg text-[11px] font-bold mb-4 leading-normal flex items-center gap-1.5 animate-bounce">
+                  <Icons.CheckCircle size={13} />
+                  <span>{authSuccessMsg}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleAuthSubmit} className="space-y-4">
+                {authMode === 'register' && (
+                  <>
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-zinc-455 font-bold mb-1 font-sans">성명 (반드시 실명만 사용) <span className="text-rose-500">*</span></label>
+                      <input 
+                        type="text" 
+                        required
+                        value={authName}
+                        onChange={(e) => setAuthName(e.target.value)}
+                        placeholder="본인의 실명을 정확히 기입해 주십시오" 
+                        className="w-full bg-zinc-950 border border-zinc-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-450"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-zinc-455 font-bold mb-1 font-sans">휴대폰 번호 <span className="text-rose-500">*</span></label>
+                      <input 
+                        type="tel" 
+                        required
+                        value={authPhone}
+                        onChange={(e) => setAuthPhone(e.target.value)}
+                        placeholder="예시: 010-1234-5678" 
+                        className="w-full bg-zinc-950 border border-zinc-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-450"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-zinc-455 font-bold mb-1 font-sans">회원 등급 구분 <span className="text-rose-500">*</span></label>
+                      <select
+                        value={authRole}
+                        onChange={(e) => {
+                          setAuthRole(e.target.value as any);
+                          setAuthError('');
+                        }}
+                        className="w-full bg-zinc-950 border border-zinc-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-450 font-semibold cursor-pointer"
+                      >
+                        <option value="student">학생 등급 (공부 질문 작성 가능)</option>
+                        <option value="guest">학부모 및 일반인 등급 (공부 질문 작성 가능)</option>
+                      </select>
+                      <p className="text-[9px] text-zinc-500 mt-1.5 leading-normal">
+                        💡 <strong>알림:</strong> 선생님 등급 및 관리자 등급은 학원 원장의 직접 검토 후 통합 회원 관리 센터를 통해 전용 승급 처리됩니다.
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-455 font-bold mb-1">이메일 주소 <span className="text-rose-500">*</span></label>
+                  <input 
+                    type="email" 
+                    required
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    placeholder="example@vollmond.co.kr" 
+                    className="w-full bg-zinc-950 border border-zinc-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-450"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-455 font-bold mb-1">비밀번호 <span className="text-rose-500">*</span></label>
+                  <input 
+                    type="password" 
+                    required
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="계정 보안 비밀번호 (4자 이상)" 
+                    className="w-full bg-zinc-950 border border-zinc-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-450"
+                  />
+                </div>
+
+                <button 
+                  type="submit" 
+                  className="w-full py-2.5 text-xs text-black font-extrabold rounded bg-rose-500 hover:brightness-110 active:scale-95 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+                  style={{ backgroundColor: theme.primaryColor }}
+                >
+                  <Icons.Key size={13} />
+                  <span>{authMode === 'login' ? '로그인 완료하기' : '새 등급 가입하고 시작하기'}</span>
+                </button>
+              </form>
+
+              <div className="mt-5 pt-4 border-t border-zinc-850 text-center">
+                {authMode === 'login' ? (
+                  <p className="text-[11px] text-zinc-500">
+                    아직 입시 전략 회원이 아니신가요?{' '}
+                    <button 
+                      onClick={() => {
+                        setAuthMode('register');
+                        setAuthError('');
+                        setAuthSuccessMsg('');
+                      }}
+                      className="text-rose-350 hover:underline font-bold"
+                      style={{ color: theme.primaryColor }}
+                    >
+                      새로운 등급으로 가입하기
+                    </button>
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-zinc-500">
+                    이미 계정이 존재하시나요?{' '}
+                    <button 
+                      onClick={() => {
+                        setAuthMode('login');
+                        setAuthError('');
+                        setAuthSuccessMsg('');
+                      }}
+                      className="text-rose-350 hover:underline font-bold"
+                      style={{ color: theme.primaryColor }}
+                    >
+                      로그인하러 가기
+                    </button>
+                  </p>
+                )}
+              </div>
+
+
+            </div>
+          </div>
+        )}
+
+        {/* -------------------- 학원 최고 관리자 전용 회원 등급 및 강퇴 센터 (사용자 정의 요구 정합 반영) -------------------- */}
+        {showUserAdminModal && (
+          <div 
+            className={`${viewMode === 'desktop' ? 'fixed' : 'absolute'} inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-[110] animate-fade-in`}
+            onClick={() => setShowUserAdminModal(false)}
+          >
+            <div 
+              className="w-full max-w-xl bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl relative p-6 md:p-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 상단 포인트 데코바 */}
+              <div className="absolute top-0 left-0 w-full h-1 bg-amber-500" />
+
+              {/* 우측 상단 X 닫기 */}
+              <button 
+                onClick={() => setShowUserAdminModal(false)}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white bg-zinc-850 hover:bg-zinc-800 p-2 rounded-full transition-all cursor-pointer"
+              >
+                <Icons.X size={14} />
+              </button>
+
+              <div className="mb-6">
+                <div className="flex items-center gap-1.5 text-xs font-black text-amber-400 uppercase tracking-wider">
+                  <Icons.ShieldAlert size={14} />
+                  <span>Admin Authority Control Room</span>
+                </div>
+                <h3 className="text-lg font-bold text-white mt-1">폴몬트 에듀 통합 회원 관리 센터</h3>
+                <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
+                  원장님께서 직접 가입된 학생, 학부모 및 교직원의 등급을 정교하게 조정하거나 부적절한 회원을 즉시 차단(강퇴)하실 수 있습니다.
+                </p>
+              </div>
+
+              {/* 통계 요약 배지 */}
+              <div className="grid grid-cols-4 gap-2 mb-4">
+                <div className="bg-zinc-950 p-2 rounded border border-zinc-850 text-center">
+                  <span className="block text-[8px] text-zinc-450 font-bold uppercase">총 회원수</span>
+                  <span className="text-xs font-black text-white">{registeredUsers.length}명</span>
+                </div>
+                <div className="bg-zinc-950 p-2 rounded border border-zinc-850 text-center">
+                  <span className="block text-[8px] text-rose-400 font-bold uppercase">선생님</span>
+                  <span className="text-xs font-black text-rose-300">
+                    {registeredUsers.filter(u => u.role === 'teacher').length}명
+                  </span>
+                </div>
+                <div className="bg-zinc-950 p-2 rounded border border-zinc-850 text-center">
+                  <span className="block text-[8px] text-emerald-400 font-bold uppercase">학생</span>
+                  <span className="text-xs font-black text-emerald-300">
+                    {registeredUsers.filter(u => u.role === 'student').length}명
+                  </span>
+                </div>
+                <div className="bg-zinc-950 p-2 rounded border border-zinc-850 text-center">
+                  <span className="block text-[8px] text-blue-400 font-bold uppercase">학부모/일반</span>
+                  <span className="text-xs font-black text-blue-300">
+                    {registeredUsers.filter(u => u.role === 'guest').length}명
+                  </span>
+                </div>
+              </div>
+
+              {/* 가입 유저 리스트 스크롤 영역 */}
+              <div className="bg-zinc-950 rounded-lg border border-zinc-850 max-h-[280px] overflow-y-auto divide-y divide-zinc-900">
+                {registeredUsers.length === 0 ? (
+                  <div className="p-8 text-center text-zinc-500 text-xs font-semibold">
+                    가입된 회원이 존재하지 않습니다.
+                  </div>
+                ) : (
+                  registeredUsers.map((user) => {
+                    const isSelf = currentUser && currentUser.email.toLowerCase() === user.email.toLowerCase();
+                    return (
+                      <div key={user.email} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-950 hover:bg-zinc-900/60 transition-all">
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-white truncate">{user.name}</span>
+                            {isSelf && (
+                              <span className="text-[8px] font-black bg-zinc-850 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/20 uppercase font-mono">
+                                관리자(본인)
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-1 mt-1 text-[10px] text-zinc-400 font-mono">
+                            <div className="flex items-center gap-1.5">
+                              <Icons.Mail size={10} className="text-zinc-500" />
+                              <span className="truncate">{user.email}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Icons.Phone size={10} className="text-zinc-500" />
+                              <span>{user.phone || "연락처 미기재"}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 등급 컨트롤러 및 강퇴 버튼 */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* 등급 셀렉트박스 */}
+                          <div className="relative">
+                            <select
+                              value={user.role}
+                              onChange={(e) => handleUpdateUserRole(user.email, e.target.value as any)}
+                              className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[11px] text-zinc-350 font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
+                            >
+                              <option value="admin">최고 관리자(나)</option>
+                              <option value="teacher">선생님 등급</option>
+                              <option value="student">학생 등급</option>
+                              <option value="guest">학부모 및 일반인</option>
+                            </select>
+                          </div>
+
+                          {/* 강퇴 처리 단추 */}
+                          <button
+                            onClick={() => handleKickUser(user.email)}
+                            disabled={isSelf}
+                            className={`p-1.5 rounded-md border text-center transition-all ${
+                              isSelf 
+                                ? 'bg-zinc-900 border-zinc-900 text-zinc-700 cursor-not-allowed' 
+                                : 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-550/30 hover:border-red-500/40 cursor-pointer'
+                            }`}
+                            title={isSelf ? "스스로를 강퇴할 수 없습니다." : "회원 탈퇴/강퇴 처리"}
+                          >
+                            <Icons.UserMinus size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* 하단 제어바 */}
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowUserAdminModal(false)}
+                  className="px-5 py-2 rounded text-xs text-black font-extrabold bg-amber-400 hover:bg-amber-300 transition-all cursor-pointer"
+                  style={{ backgroundColor: theme.primaryColor }}
+                >
+                  확인 및 완료
+                </button>
+              </div>
+
             </div>
           </div>
         )}
