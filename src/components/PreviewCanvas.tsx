@@ -347,17 +347,22 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
       
       const userDocRef = doc(db, 'users', user.uid);
       const docSnap = await getDoc(userDocRef);
+      const userEmail = (user.email || '').trim().toLowerCase();
+      const isAdminEmail = userEmail === 'rosa.lee.german@gmail.com';
       
       if (!docSnap.exists()) {
         const defaultName = user.displayName && user.displayName.length >= 2 ? user.displayName : '구글 사용자';
         const newUser: HomeUser = {
           email: user.email || '',
           passwordHash: 'google-oauth',
-          name: defaultName,
-          role: 'student',
+          name: isAdminEmail ? '원장 (관리자)' : defaultName,
+          role: isAdminEmail ? 'admin' : 'student',
           phone: '010-0000-0000'
         };
         await setDoc(userDocRef, newUser);
+      } else if (isAdminEmail && docSnap.data()?.role !== 'admin') {
+        // Upgrade existing document to admin if logged in via Google sign-in with your authorized developer address
+        await updateDoc(userDocRef, { role: 'admin' });
       }
       
       setAuthSuccessMsg(`✓ 구글 계정으로 로그인되었습니다! 환영합니다.`);
