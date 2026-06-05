@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document containing role and other personal details",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "description": "User email address" },
+        "name": { "type": "string", "description": "User real name" },
+        "role": { "type": "string", "enum": ["admin", "teacher", "student", "guest"], "description": "User role/grade" },
+        "phone": { "type": "string", "description": "User phone number" }
+      },
+      "required": ["email", "name", "role", "phone"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "A study board post created by a student or a guest user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the post" },
+        "title": { "type": "string", "description": "Title of the study post" },
+        "author": { "type": "string", "description": "Author display name" },
+        "email": { "type": "string", "description": "Author email address" },
+        "content": { "type": "string", "description": "Content of the post" },
+        "passwordHash": { "type": "string", "description": "A lock password for secure posts" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "replies": { "type": "string", "description": "Admin/Teacher feedback reply" }
+      },
+      "required": ["id", "title", "author", "email", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User collection mapped by Firebase Auth UID"
+    },
+    "posts/{postId}": {
+      "schema": "Post",
+      "description": "Study posts collection"
+    }
+  }
+}

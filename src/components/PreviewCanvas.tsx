@@ -9,6 +9,25 @@ import * as Icons from 'lucide-react';
 import defaultHeroImage from '../../public/assets/images/blue_sky_moon_1779892119976.png';
 import kakaotalkQrCode from '../../public/assets/images/kakaotalk_qr_code_1779893911603.png';
 
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  getDocs, 
+  onSnapshot, 
+  query 
+} from 'firebase/firestore';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+
 interface PreviewCanvasProps {
   data: WebsiteData;
   viewMode: DeviceViewMode;
@@ -42,47 +61,82 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   const [activeCourseTab, setActiveCourseTab] = useState<'regular' | 'certificate'>('regular');
   
   // --- [회원가입제 회원 관리 데이터 및 상태] ---
-  const [registeredUsers, setRegisteredUsers] = useState<HomeUser[]>(() => {
-    try {
-      const saved = localStorage.getItem('vollmond_registered_users');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error(e);
-    }
-    // 기본 체험형 데모 계정 제공 (사용자가 테스트하기 쉽도록)
-    return [
-      {
-        email: 'spitze.deutsch@gmail.com',
-        passwordHash: 'Rofh5454',
-        name: '대표 원장님 (관리자)',
-        role: 'admin',
-        phone: '010-0000-0000'
-      },
-      {
-        email: 'teacher.kim@vollmond.co.kr',
-        passwordHash: 'teacher1234',
-        name: '김전략 선생님 (강사)',
-        role: 'teacher',
-        phone: '010-1234-5678'
-      },
-      {
-        email: 'student@vollmond.co.kr',
-        passwordHash: 'student1234',
-        name: '홍길동 학생',
-        role: 'student',
-        phone: '010-9876-5432'
-      }
-    ];
-  });
+  const [registeredUsers, setRegisteredUsers] = useState<HomeUser[]>([]);
+  const [currentUser, setCurrentUser] = useState<HomeUser | null>(null);
+  const [firestorePosts, setFirestorePosts] = useState<BoardPost[]>([]);
 
-  const [currentUser, setCurrentUser] = useState<HomeUser | null>(() => {
-    try {
-      const saved = localStorage.getItem('vollmond_current_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
+  // 1 & 10. Firebase Auth state listener + user profile sync
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        try {
+          const docSnap = await getDoc(userDocRef);
+          if (docSnap.exists()) {
+            setCurrentUser({ uid: firebaseUser.uid, ...docSnap.data() } as any as HomeUser);
+          } else {
+            console.warn('User profile document has not been created yet in Firestore.');
+          }
+        } catch (err) {
+          console.error('Error fetching user profile:', err);
+        }
+      } else {
+        setCurrentUser(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 10. Real-time lists synchronization for multi-session/multi-device tracking
+  useEffect(() => {
+    if (!currentUser) {
+      setRegisteredUsers([]);
+      return;
     }
-  });
+
+    if (currentUser.role === 'admin') {
+      // 5. Only admin can load/list all user profiles
+      const q = collection(db, 'users');
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const usersList: HomeUser[] = [];
+        snapshot.forEach((doc) => {
+          usersList.push({ uid: doc.id, ...doc.data() } as any as HomeUser);
+        });
+        setRegisteredUsers(usersList);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'users');
+      });
+      return () => unsubscribe();
+    } else {
+      // Normal users can only fetch their own profile
+      const q = doc(db, 'users', auth.currentUser?.uid || 'placeholder');
+      const unsubscribe = onSnapshot(q, (docSnap) => {
+        if (docSnap.exists()) {
+          setRegisteredUsers([{ uid: docSnap.id, ...docSnap.data() } as any as HomeUser]);
+        }
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, `users/${auth.currentUser?.uid}`);
+      });
+      return () => unsubscribe();
+    }
+  }, [currentUser]);
+
+  // Sync board posts from Firestore's posts collection
+  useEffect(() => {
+    const q = collection(db, 'posts');
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const postsList: BoardPost[] = [];
+      snapshot.forEach((doc) => {
+        postsList.push({ id: doc.id, ...doc.data() } as BoardPost);
+      });
+      // Sort descending by creation date
+      postsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setFirestorePosts(postsList);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'posts');
+    });
+    return () => unsubscribe();
+  }, []);
 
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -98,38 +152,61 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   // --- [회원 등급 및 강퇴 관리자 센터 상태 및 로직] ---
   const [showUserAdminModal, setShowUserAdminModal] = useState(false);
 
-  const handleUpdateUserRole = (email: string, newRole: 'admin' | 'teacher' | 'student' | 'guest') => {
-    // 권한 안전 검증: 로그인한 계정이 'admin'이 아닐 경우 철저히 거부
+  const handleUpdateUserRole = async (identifier: string, newRole: 'admin' | 'teacher' | 'student' | 'guest') => {
+    // 6. Only admin can modify roles
     if (!currentUser || currentUser.role !== 'admin') {
       alert('회원 권한을 변경할 권한이 없습니다. (원장 최고 관리자 전용 기능)');
       return;
     }
 
-    setRegisteredUsers(prev => prev.map(u => {
-      if (u.email.toLowerCase() === email.toLowerCase()) {
-        const updated = { ...u, role: newRole };
-        if (currentUser && currentUser.email.toLowerCase() === email.toLowerCase()) {
-          setCurrentUser(updated);
-        }
-        return updated;
-      }
-      return u;
-    }));
+    const foundUser = registeredUsers.find(u => u.uid === identifier || u.email.toLowerCase() === identifier.toLowerCase());
+    if (!foundUser) {
+      alert('해당 회원을 찾을 수 없습니다.');
+      return;
+    }
+
+    const targetUid = foundUser.uid;
+    if (!targetUid) {
+      alert('회원의 UID 정보 조회가 불가합니다.');
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'users', targetUid), { role: newRole });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${targetUid}`);
+    }
   };
 
-  const handleKickUser = (email: string) => {
-    // 권한 안전 검증: 로그인한 계정이 'admin'이 아닐 경우 철저히 거부
+  const handleKickUser = async (identifier: string) => {
+    // 6. Only admin can kick users
     if (!currentUser || currentUser.role !== 'admin') {
       alert('회원을 탈퇴(강퇴)시킬 과학적 권한이 없습니다. (원장 최고 관리자 전용 기능)');
       return;
     }
 
-    if (currentUser.email.toLowerCase() === email.toLowerCase()) {
+    const foundUser = registeredUsers.find(u => u.uid === identifier || u.email.toLowerCase() === identifier.toLowerCase());
+    if (!foundUser) {
+      alert('해당 회원을 찾을 수 없습니다.');
+      return;
+    }
+
+    if (currentUser.email.toLowerCase() === foundUser.email.toLowerCase()) {
       alert('본인 최고 관리자 계정은 스스로 강퇴할 수 없습니다.');
       return;
     }
-    if (window.confirm(`정말 해당 회원을 즉시 탈퇴(강퇴)시키겠습니까?\n이메일: ${email}`)) {
-      setRegisteredUsers(prev => prev.filter(u => u.email.toLowerCase() !== email.toLowerCase()));
+
+    if (window.confirm(`정말 해당 회원을 즉시 탈퇴(강퇴)시키겠습니까?\n이메일: ${foundUser.email}`)) {
+      const targetUid = foundUser.uid;
+      if (!targetUid) {
+        alert('회원의 고유 ID(UID) 정보가 없어서 강퇴할 수 없습니다.');
+        return;
+      }
+      try {
+        await deleteDoc(doc(db, 'users', targetUid));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `users/${targetUid}`);
+      }
     }
   };
 
@@ -160,40 +237,50 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   const [inquiryMessage, setInquiryMessage] = useState('');
   const [formSubmitted, setFormSubmitted] = useState(false);
 
-  // 로컬 영속성 싱크
-  useEffect(() => {
-    localStorage.setItem('vollmond_registered_users', JSON.stringify(registeredUsers));
-  }, [registeredUsers]);
-
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('vollmond_current_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('vollmond_current_user');
-    }
-  }, [currentUser]);
-
-  const handleAuthSubmit = (e: React.FormEvent) => {
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
     setAuthSuccessMsg('');
 
     if (authMode === 'login') {
-      const user = registeredUsers.find(
-        u => u.email.trim().toLowerCase() === authEmail.trim().toLowerCase() && u.passwordHash === authPassword
-      );
-      if (!user) {
-        setAuthError('이메일 주소 또는 비밀번호가 일치하지 않습니다.');
-        return;
+      try {
+        await signInWithEmailAndPassword(auth, authEmail.trim(), authPassword);
+        setAuthSuccessMsg(`✓ 로그인되었습니다! 환영합니다.`);
+        setTimeout(() => {
+          setShowAuthModal(false);
+          setAuthSuccessMsg('');
+          setAuthEmail('');
+          setAuthPassword('');
+        }, 1200);
+      } catch (err: any) {
+        // Bootstrapping the default supreme admin on first login attempt if they don't exist yet in Auth
+        if (authEmail.trim().toLowerCase() === 'spitze.deutsch@gmail.com' && authPassword === 'Rofh5454') {
+          try {
+            const userCredential = await createUserWithEmailAndPassword(auth, authEmail.trim(), authPassword);
+            const uid = userCredential.user.uid;
+            const profile: HomeUser = {
+              email: 'spitze.deutsch@gmail.com',
+              passwordHash: 'Rofh5454',
+              name: '대표 원장님 (관리자)',
+              role: 'admin',
+              phone: '010-0000-0000'
+            };
+            await setDoc(doc(db, 'users', uid), profile);
+            setAuthSuccessMsg(`✓ 최고 관리자(원장님) 계정이 활성화되고 로그인되었습니다!`);
+            setTimeout(() => {
+              setShowAuthModal(false);
+              setAuthSuccessMsg('');
+              setAuthEmail('');
+              setAuthPassword('');
+            }, 1500);
+            return;
+          } catch (signUpErr: any) {
+            setAuthError(`최고 관리자 부트스트랩 실패: ${signUpErr.message}`);
+            return;
+          }
+        }
+        setAuthError('이메일 주소 또는 비밀번호가 일치하지 않습니다. 혹은 관리자 기기 최초 가입이 아니거나 가입되지 않은 이메일입니다.');
       }
-      setCurrentUser(user);
-      setAuthSuccessMsg(`✓ ${user.name}님, 환영합니다!`);
-      setTimeout(() => {
-        setShowAuthModal(false);
-        setAuthSuccessMsg('');
-        setAuthEmail('');
-        setAuthPassword('');
-      }, 1200);
     } else {
       if (!authEmail || !authPassword || !authName || !authPhone) {
         setAuthError('모든 양식 필드(이름, 휴대폰 번호 포함)를 완전히 기재해 주세요.');
@@ -226,42 +313,52 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
         setAuthError('비밀번호는 최소 4자 이상으로 설정해 주세요.');
         return;
       }
-      const isExist = registeredUsers.some(
-        u => u.email.trim().toLowerCase() === authEmail.trim().toLowerCase()
-      );
-      if (isExist) {
-        setAuthError('해당 이메일 주소는 이미 가입되어 있습니다.');
-        return;
+
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, authEmail.trim(), authPassword);
+        const uid = userCredential.user.uid;
+        
+        const newUser: HomeUser = {
+          email: authEmail.trim(),
+          passwordHash: authPassword,
+          name: nameTrim,
+          role: authRole as 'student' | 'guest',
+          phone: cleanedPhone
+        };
+
+        // Save profile block to Firestore users/{uid}
+        await setDoc(doc(db, 'users', uid), newUser);
+
+        setAuthSuccessMsg(`✓ 회원가입이 성공적으로 완료 및 자동 로그인되었습니다!`);
+        setTimeout(() => {
+          setShowAuthModal(false);
+          setAuthSuccessMsg('');
+          setAuthEmail('');
+          setAuthPassword('');
+          setAuthName('');
+          setAuthCode('');
+          setAuthPhone('');
+        }, 1200);
+      } catch (err: any) {
+        if (err.code === 'auth/email-already-in-use') {
+          setAuthError('이미 가입된 이메일 주소입니다.');
+        } else {
+          setAuthError(`회원가입 실패: ${err.message}`);
+        }
       }
-
-      const newUser: HomeUser = {
-        email: authEmail.trim(),
-        passwordHash: authPassword,
-        name: nameTrim,
-        role: authRole as 'student' | 'guest',
-        phone: cleanedPhone
-      };
-
-      setRegisteredUsers(prev => [...prev, newUser]);
-      setCurrentUser(newUser);
-      setAuthSuccessMsg(`✓ 회원가입이 성공적으로 완료 및 자동 로그인되었습니다!`);
-      setTimeout(() => {
-        setShowAuthModal(false);
-        setAuthSuccessMsg('');
-        setAuthEmail('');
-        setAuthPassword('');
-        setAuthName('');
-        setAuthCode('');
-        setAuthPhone('');
-      }, 1200);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (window.confirm('정말 로그아웃 하시겠습니까?')) {
-      setCurrentUser(null);
-      setSelectedBoardPost(null);
-      setIsUnlocked(false);
+      try {
+        await signOut(auth);
+        setCurrentUser(null);
+        setSelectedBoardPost(null);
+        setIsUnlocked(false);
+      } catch (err: any) {
+        console.error('로그아웃 실패:', err);
+      }
     }
   };
 
@@ -280,7 +377,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   };
 
   // 공부 질문 게시판 포스트 처리 함수군 (완벽 작동 기획)
-  const handleCreatePost = (e: React.FormEvent) => {
+  const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) {
       setBoardPostFormError('질문을 등록하려면 먼저 로그인해 주십시오.');
@@ -299,8 +396,9 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
       return;
     }
 
+    const newPostId = `board-${Date.now()}`;
     const newPost: BoardPost = {
-      id: `board-${Date.now()}`,
+      id: newPostId,
       title: boardPostTitle,
       author: currentUser.name,
       email: currentUser.email,
@@ -310,28 +408,26 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
       replies: "안녕하세요! 폴몬트 에듀 개별 밀착 Q&A 게시판에 상세 질문을 전송해 주셔서 감사합니다. 기재하여 주신 연락처와 본 비밀글 답변창을 통해 담당 학과별 입시 전략 전담 선생님께서 24시간 이내에 꼼꼼한 심층 맞춤 답변 및 다음 수강 전 레벨 평가 안내 가이드를 전달할 예정입니다! 조금만 대기 요망 드립니다."
     };
 
-    const updatedPosts = [newPost, ...(data.boardPosts || [])];
-    if (onUpdateData) {
-      onUpdateData({
-        ...data,
-        boardPosts: updatedPosts
-      });
-    }
+    try {
+      await setDoc(doc(db, 'posts', newPostId), newPost);
 
-    // 초기화
-    setBoardPostName('');
-    setBoardPostPassword('');
-    setBoardPostEmail('');
-    setBoardPostTitle('');
-    setBoardPostContent('');
-    setBoardPostFormError('');
-    setIsCreatingPost(false);
-    
-    setBoardSuccessToast('✓ 새 질문글이 안전하게 등록되었습니다! (모두 자동 비밀글 처리 완료)');
-    setTimeout(() => setBoardSuccessToast(''), 4000);
+      // Initialize states
+      setBoardPostName('');
+      setBoardPostPassword('');
+      setBoardPostEmail('');
+      setBoardPostTitle('');
+      setBoardPostContent('');
+      setBoardPostFormError('');
+      setIsCreatingPost(false);
+      
+      setBoardSuccessToast('✓ 새 질문글이 안전하게 등록되었습니다! (모두 자동 비밀글 처리 완료)');
+      setTimeout(() => setBoardSuccessToast(''), 4000);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `posts/${newPostId}`);
+    }
   };
 
-  const handleEditPost = (e: React.FormEvent) => {
+  const handleEditPost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBoardPost) return;
     if (!boardPostTitle || !boardPostContent) {
@@ -339,42 +435,41 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
       return;
     }
 
-    const updatedPost: BoardPost = {
-      ...selectedBoardPost,
-      title: boardPostTitle,
-      content: boardPostContent,
-    };
-
-    const updatedPosts = (data.boardPosts || []).map(p => p.id === selectedBoardPost.id ? updatedPost : p);
-    if (onUpdateData) {
-      onUpdateData({
-        ...data,
-        boardPosts: updatedPosts
+    try {
+      await updateDoc(doc(db, 'posts', selectedBoardPost.id), {
+        title: boardPostTitle,
+        content: boardPostContent,
       });
-    }
 
-    setSelectedBoardPost(updatedPost);
-    setIsEditingPost(false);
-    setBoardPostFormError('');
-    setBoardSuccessToast('✓ 질문글이 성공적으로 수정되었습니다.');
-    setTimeout(() => setBoardSuccessToast(''), 4000);
+      const updatedPost: BoardPost = {
+        ...selectedBoardPost,
+        title: boardPostTitle,
+        content: boardPostContent,
+      };
+
+      setSelectedBoardPost(updatedPost);
+      setIsEditingPost(false);
+      setBoardPostFormError('');
+      setBoardSuccessToast('✓ 질문글이 성공적으로 수정되었습니다.');
+      setTimeout(() => setBoardSuccessToast(''), 4000);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `posts/${selectedBoardPost.id}`);
+    }
   };
 
-  const handleDeletePost = (postId: string) => {
+  const handleDeletePost = async (postId: string) => {
     if (!window.confirm('이 공부 질문글을 영구적으로 삭제하시겠습니까? 삭제 후에는 복구가 불가능합니다.')) {
       return;
     }
-    const updatedPosts = (data.boardPosts || []).filter(p => p.id !== postId);
-    if (onUpdateData) {
-      onUpdateData({
-        ...data,
-        boardPosts: updatedPosts
-      });
+    try {
+      await deleteDoc(doc(db, 'posts', postId));
+      setSelectedBoardPost(null);
+      setIsUnlocked(false);
+      setBoardSuccessToast('✓ 질문글이 정상적으로 제거 완료되었습니다.');
+      setTimeout(() => setBoardSuccessToast(''), 4000);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `posts/${postId}`);
     }
-    setSelectedBoardPost(null);
-    setIsUnlocked(false);
-    setBoardSuccessToast('✓ 질문글이 정상적으로 제거 완료되었습니다.');
-    setTimeout(() => setBoardSuccessToast(''), 4000);
   };
 
   // 폰트 스타일 매핑
@@ -2050,25 +2145,25 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                           <div className="flex justify-end">
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={async () => {
                                 if (!boardReplyInput.trim()) {
                                   alert('답변 본문을 입력해 주세요.');
                                   return;
                                 }
-                                const updatedPost: BoardPost = {
-                                  ...selectedBoardPost,
-                                  replies: boardReplyInput
-                                };
-                                const updatedPosts = (data.boardPosts || []).map(p => p.id === selectedBoardPost.id ? updatedPost : p);
-                                if (onUpdateData) {
-                                  onUpdateData({
-                                    ...data,
-                                    boardPosts: updatedPosts
+                                try {
+                                  await updateDoc(doc(db, 'posts', selectedBoardPost.id), {
+                                    replies: boardReplyInput
                                   });
+                                  const updatedPost: BoardPost = {
+                                    ...selectedBoardPost,
+                                    replies: boardReplyInput
+                                  };
+                                  setSelectedBoardPost(updatedPost);
+                                  setBoardSuccessToast('✓ 1:1 맞춤 피드백을 실시간 업데이트 반영하였습니다!');
+                                  setTimeout(() => setBoardSuccessToast(''), 3000);
+                                } catch (err) {
+                                  handleFirestoreError(err, OperationType.UPDATE, `posts/${selectedBoardPost.id}`);
                                 }
-                                setSelectedBoardPost(updatedPost);
-                                setBoardSuccessToast('✓ 1:1 맞춤 피드백을 실시간 업데이트 반영하였습니다!');
-                                setTimeout(() => setBoardSuccessToast(''), 3000);
                               }}
                               className="px-3.5 py-1.5 text-black font-extrabold rounded text-[10px] hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
                               style={{ backgroundColor: theme.primaryColor }}
@@ -2169,14 +2264,14 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                   {/* 공부 게시글 리스트 영역 */}
                   <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-3">
 
-                    {(data.boardPosts || []).length === 0 ? (
+                    {(firestorePosts.length > 0 ? firestorePosts : (data.boardPosts || [])).length === 0 ? (
                       <div className="text-center py-12 text-zinc-500 space-y-2">
                         <Icons.HelpCircle size={30} className="mx-auto opacity-30" />
                         <p className="text-xs">등록된 공부 질문사항이 없습니다.</p>
                         <p className="text-[10px]">첫 번째 공부 비밀 질문의 주인공이 되어보세요!</p>
                       </div>
                     ) : (
-                      (data.boardPosts || []).map((post) => {
+                      (firestorePosts.length > 0 ? firestorePosts : (data.boardPosts || [])).map((post) => {
                         const formatAuthor = (name: string) => {
                           if (name.length <= 1) return name;
                           if (name.length === 2) return name[0] + '*';

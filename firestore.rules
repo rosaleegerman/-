@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getUserData(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    function isTeacher() {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "teacher";
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      // 5. Only admin can query/list all profiles
+      // 7. Normal users can only get/read their own profile
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+
+      // Create profile during signup
+      // Prevent self-assignment of admin/teacher roles unless it's the premium supreme admin email.
+      allow create: if isSignedIn() && isOwner(userId) && (
+        request.resource.data.role == 'student' || 
+        request.resource.data.role == 'guest' || 
+        request.auth.token.email == 'spitze.deutsch@gmail.com'
+      ) &&
+      request.resource.data.email == request.auth.token.email &&
+      request.resource.data.name is string && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 60 &&
+      request.resource.data.phone is string && request.resource.data.phone.size() >= 9 && request.resource.data.phone.size() <= 30;
+
+      // Update: Admin can update any field.
+      // Owner can update name/phone, but must not change their role or email.
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.email == resource.data.email &&
+        request.resource.data.name is string && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 60 &&
+        request.resource.data.phone is string && request.resource.data.phone.size() >= 9 && request.resource.data.phone.size() <= 30
+      );
+
+      // Delete: Only admin can delete other accounts (No self-deletion)
+      allow delete: if isAdmin() && !isOwner(userId);
+    }
+
+    // --- Posts Collection ---
+    match /posts/{postId} {
+      // Anyone (including unsigned-in guests) can read posts to view titles on the landing page
+      allow read: if true;
+
+      // Create a study post
+      allow create: if isSignedIn() && 
+                    request.resource.data.email == request.auth.token.email &&
+                    request.resource.data.title is string && request.resource.data.title.size() > 0 &&
+                    request.resource.data.content is string && request.resource.data.content.size() > 0;
+
+      // Update a post:
+      // - Author can edit the title or content
+      // - Admins/Teachers can update replies or any fields
+      allow update: if isAdmin() || isTeacher() || (
+        isSignedIn() && 
+        resource.data.email == request.auth.token.email &&
+        request.resource.data.email == resource.data.email &&
+        // Author can only update title, content, passwordHash — replies must be unchanged or if set is equal
+        request.resource.data.replies == resource.data.replies
+      );
+
+      // Delete a post: Admin, Teacher or the Author
+      allow delete: if isAdmin() || isTeacher() || (
+        isSignedIn() && resource.data.email == request.auth.token.email
+      );
+    }
+  }
+}
