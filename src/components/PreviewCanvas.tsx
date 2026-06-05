@@ -24,7 +24,9 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 
@@ -253,33 +255,17 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
           setAuthPassword('');
         }, 1200);
       } catch (err: any) {
-        // Bootstrapping the default supreme admin on first login attempt if they don't exist yet in Auth
-        if (authEmail.trim().toLowerCase() === 'spitze.deutsch@gmail.com' && authPassword === 'Rofh5454') {
-          try {
-            const userCredential = await createUserWithEmailAndPassword(auth, authEmail.trim(), authPassword);
-            const uid = userCredential.user.uid;
-            const profile: HomeUser = {
-              email: 'spitze.deutsch@gmail.com',
-              passwordHash: 'Rofh5454',
-              name: '대표 원장님 (관리자)',
-              role: 'admin',
-              phone: '010-0000-0000'
-            };
-            await setDoc(doc(db, 'users', uid), profile);
-            setAuthSuccessMsg(`✓ 최고 관리자(원장님) 계정이 활성화되고 로그인되었습니다!`);
-            setTimeout(() => {
-              setShowAuthModal(false);
-              setAuthSuccessMsg('');
-              setAuthEmail('');
-              setAuthPassword('');
-            }, 1500);
-            return;
-          } catch (signUpErr: any) {
-            setAuthError(`최고 관리자 부트스트랩 실패: ${signUpErr.message}`);
-            return;
-          }
+        let errorMsg = '이메일 주소 또는 비밀번호가 일치하지 않습니다.';
+        if (err.code === 'auth/user-not-found') {
+          errorMsg = '가입되지 않은 계정입니다. 새로 가입을 진행해 주시거나 구글 간편 로그인을 이용해 주세요!';
+        } else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+          errorMsg = '이메일 주소 또는 비밀번호가 일치하지 않습니다.';
+        } else if (err.code === 'auth/invalid-email') {
+          errorMsg = '올바른 이메일 주소 형식이 아닙니다.';
+        } else if (err.code === 'auth/operation-not-allowed') {
+          errorMsg = '이메일/비밀번호 로그인 기능이 아직 열려있지 않습니다. 구글 로그인을 사용해 가입해 주세요.';
         }
-        setAuthError('이메일 주소 또는 비밀번호가 일치하지 않습니다. 혹은 관리자 기기 최초 가입이 아니거나 가입되지 않은 이메일입니다.');
+        setAuthError(`${errorMsg}\n(안내: Firebase 실시간 연동 적용으로, 기존 데모 계정 정보 대신 신규 가입 또는 Google 로그인이 중요합니다.)`);
       }
     } else {
       if (!authEmail || !authPassword || !authName || !authPhone) {
@@ -309,8 +295,8 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
         setAuthError('유효하지 않은 이메일 형식입니다.');
         return;
       }
-      if (authPassword.length < 4) {
-        setAuthError('비밀번호는 최소 4자 이상으로 설정해 주세요.');
+      if (authPassword.length < 6) {
+        setAuthError('비밀번호는 최소 6자 이상으로 설정해 주세요. (Firebase 보안 최소 기준)');
         return;
       }
 
@@ -342,10 +328,45 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
       } catch (err: any) {
         if (err.code === 'auth/email-already-in-use') {
           setAuthError('이미 가입된 이메일 주소입니다.');
+        } else if (err.code === 'auth/operation-not-allowed') {
+          setAuthError('이메일/비밀번호 가입 기능이 Firebase Auth에서 아직 활성화되지 않았습니다. Firebase 콘솔(https://console.firebase.google.com/project/serious-ratio-gf4nj/authentication/providers)에 방문해 "이메일/비밀번호" 로그인을 활성화하시거나 아래의 Google 간편 가입을 사용해 주세요.');
         } else {
           setAuthError(`회원가입 실패: ${err.message}`);
         }
       }
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setAuthError('');
+    setAuthSuccessMsg('');
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      const userDocRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(userDocRef);
+      
+      if (!docSnap.exists()) {
+        const defaultName = user.displayName && user.displayName.length >= 2 ? user.displayName : '구글 사용자';
+        const newUser: HomeUser = {
+          email: user.email || '',
+          passwordHash: 'google-oauth',
+          name: defaultName,
+          role: 'student',
+          phone: '010-0000-0000'
+        };
+        await setDoc(userDocRef, newUser);
+      }
+      
+      setAuthSuccessMsg(`✓ 구글 계정으로 로그인되었습니다! 환영합니다.`);
+      setTimeout(() => {
+        setShowAuthModal(false);
+        setAuthSuccessMsg('');
+      }, 1200);
+    } catch (err: any) {
+      setAuthError(`구글 로그인 실패: ${err.message}`);
     }
   };
 
@@ -2470,7 +2491,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                     required
                     value={authPassword}
                     onChange={(e) => setAuthPassword(e.target.value)}
-                    placeholder="계정 보안 비밀번호 (4자 이상)" 
+                    placeholder="계정 보안 비밀번호 (6자 이상)" 
                     className="w-full bg-zinc-950 border border-zinc-850 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-450"
                   />
                 </div>
@@ -2484,6 +2505,21 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                   <span>{authMode === 'login' ? '로그인 완료하기' : '새 등급 가입하고 시작하기'}</span>
                 </button>
               </form>
+
+              <div className="flex items-center my-4">
+                <div className="flex-1 h-px bg-zinc-800" />
+                <span className="px-3 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">또는</span>
+                <div className="flex-1 h-px bg-zinc-800" />
+              </div>
+
+              <button 
+                type="button"
+                onClick={handleGoogleSignIn}
+                className="w-full py-2.5 text-xs text-white bg-zinc-800 hover:bg-zinc-750 active:scale-95 transition-all text-center flex items-center justify-center gap-2 rounded border border-zinc-700 cursor-pointer"
+              >
+                <Icons.Chrome size={13} className="text-rose-400" />
+                <span>Google 계정으로 1초 로그인 / 가입</span>
+              </button>
 
               <div className="mt-5 pt-4 border-t border-zinc-850 text-center">
                 {authMode === 'login' ? (
