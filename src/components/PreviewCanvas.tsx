@@ -305,7 +305,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
         const uid = userCredential.user.uid;
         
         const newUser: HomeUser = {
-          email: authEmail.trim(),
+          email: authEmail.trim().toLowerCase(),
           passwordHash: authPassword,
           name: nameTrim,
           role: authRole as 'student' | 'guest',
@@ -354,7 +354,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
       if (!docSnap.exists()) {
         const defaultName = user.displayName && user.displayName.length >= 2 ? user.displayName : '구글 사용자';
         const newUser: HomeUser = {
-          email: user.email || '',
+          email: (user.email || '').trim().toLowerCase(),
           passwordHash: 'google-oauth',
           name: isAdminEmail ? '대표 원장 (관리자)' : defaultName,
           role: isAdminEmail ? 'admin' : 'student',
