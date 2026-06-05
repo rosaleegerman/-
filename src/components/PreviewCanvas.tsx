@@ -1267,6 +1267,12 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                           teacher: '이로사 T',
                           desc: '[B2 대비반] 매주 금요일 18-21시 (영상 수강 가능 / 자체 제작 교재)',
                           price: '4회 400,000원',
+                        },
+                    {
+                          subject: '스페인어',
+                          teacher: '디오 T',
+                          desc: '[A2 수준 종합반] 매주 화/목 19-20:30 (영상 수강 가능 / 자체 제작 교재)',
+                          price: '8회 400,000원',
                         }
                       ].map((item, idx) => (
                         <div 
