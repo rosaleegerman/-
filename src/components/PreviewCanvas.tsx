@@ -99,6 +99,12 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   const [showUserAdminModal, setShowUserAdminModal] = useState(false);
 
   const handleUpdateUserRole = (email: string, newRole: 'admin' | 'teacher' | 'student' | 'guest') => {
+    // 권한 안전 검증: 로그인한 계정이 'admin'이 아닐 경우 철저히 거부
+    if (!currentUser || currentUser.role !== 'admin') {
+      alert('회원 권한을 변경할 권한이 없습니다. (원장 최고 관리자 전용 기능)');
+      return;
+    }
+
     setRegisteredUsers(prev => prev.map(u => {
       if (u.email.toLowerCase() === email.toLowerCase()) {
         const updated = { ...u, role: newRole };
@@ -112,8 +118,14 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   };
 
   const handleKickUser = (email: string) => {
-    if (currentUser && currentUser.email.toLowerCase() === email.toLowerCase()) {
-      alert('본인 계정은 스스로 강퇴할 수 없습니다.');
+    // 권한 안전 검증: 로그인한 계정이 'admin'이 아닐 경우 철저히 거부
+    if (!currentUser || currentUser.role !== 'admin') {
+      alert('회원을 탈퇴(강퇴)시킬 과학적 권한이 없습니다. (원장 최고 관리자 전용 기능)');
+      return;
+    }
+
+    if (currentUser.email.toLowerCase() === email.toLowerCase()) {
+      alert('본인 최고 관리자 계정은 스스로 강퇴할 수 없습니다.');
       return;
     }
     if (window.confirm(`정말 해당 회원을 즉시 탈퇴(강퇴)시키겠습니까?\n이메일: ${email}`)) {
