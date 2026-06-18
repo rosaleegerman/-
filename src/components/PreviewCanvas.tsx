@@ -93,13 +93,36 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         try {
           const docSnap = await getDoc(userDocRef);
+          const userEmail = (firebaseUser.email || '').trim().toLowerCase();
+          const isAdminEmail = userEmail === 'rosa.lee.german@gmail.com' || userEmail === 'spitze.deutsch@gmail.com';
+
           if (docSnap.exists()) {
-            setCurrentUser({ uid: firebaseUser.uid, ...docSnap.data() } as any as HomeUser);
+            const data = docSnap.data();
+            if (isAdminEmail && data.role !== 'admin') {
+              console.log('Upgrading user role to admin dynamically for authorized email.');
+              await updateDoc(userDocRef, { role: 'admin' });
+              setCurrentUser({ uid: firebaseUser.uid, ...data, role: 'admin' } as any as HomeUser);
+            } else {
+              setCurrentUser({ uid: firebaseUser.uid, ...data } as any as HomeUser);
+            }
           } else {
             console.warn('User profile document has not been created yet in Firestore.');
+            if (isAdminEmail) {
+              const defaultName = firebaseUser.displayName || '대표 원장 (관리자)';
+              const newUser: HomeUser = {
+                email: userEmail,
+                passwordHash: 'created-automatically',
+                name: defaultName,
+                role: 'admin',
+                phone: '010-0000-0000'
+              };
+              await setDoc(userDocRef, newUser);
+              setCurrentUser({ uid: firebaseUser.uid, ...newUser } as any as HomeUser);
+              console.log('Admin profile auto-provisioned successfully.');
+            }
           }
         } catch (err) {
-          console.error('Error fetching user profile:', err);
+          console.error('Error fetching/upgrading user profile:', err);
         }
       } else {
         setCurrentUser(null);
@@ -340,11 +363,14 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
         const userCredential = await createUserWithEmailAndPassword(auth, authEmail.trim(), authPassword);
         const uid = userCredential.user.uid;
         
+        const emailFieldVal = authEmail.trim().toLowerCase();
+        const isAdminEmail = emailFieldVal === 'rosa.lee.german@gmail.com' || emailFieldVal === 'spitze.deutsch@gmail.com';
+
         const newUser: HomeUser = {
-          email: authEmail.trim().toLowerCase(),
+          email: emailFieldVal,
           passwordHash: authPassword,
-          name: nameTrim,
-          role: authRole as 'student' | 'guest',
+          name: isAdminEmail ? '대표 원장 (관리자)' : nameTrim,
+          role: isAdminEmail ? 'admin' : (authRole as 'student' | 'guest'),
           phone: cleanedPhone
         };
 
