@@ -90,6 +90,10 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        console.log("=================== [사용자 로그인 감지] ===================");
+        console.log("로그인된 사용자 Firebase Auth UID:", firebaseUser.uid);
+        console.log("로그인된 사용자 이메일:", firebaseUser.email);
+        console.log("==========================================================");
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         try {
           const docSnap = await getDoc(userDocRef);
@@ -3335,6 +3339,11 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                 <p className="text-[11px] text-zinc-400 mt-1.5 leading-relaxed">
                   원장님께서 직접 가입된 학생, 학부모 및 교직원의 등급을 정교하게 조정하거나 부적절한 회원을 즉시 차단(강퇴)하실 수 있습니다.
                 </p>
+                {/* 나의 Firebase Auth UID 조회 패널 */}
+                <div className="mt-3 p-2 bg-zinc-950 rounded border border-zinc-900 flex justify-between items-center text-[10px] font-mono leading-none">
+                  <span className="text-zinc-500 font-sans tracking-wide">나의 Firebase Auth UID:</span>
+                  <span className="text-amber-450 select-all font-bold tracking-tight">{auth.currentUser?.uid || '로딩 중...'}</span>
+                </div>
               </div>
 
               {/* 통계 요약 배지 */}
