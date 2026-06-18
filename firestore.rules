@@ -16,9 +16,12 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && 
-             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin") ||
+        (request.auth.token.email.matches('(?i)^rosa\\.lee\\.german@gmail\\.com$') || 
+         request.auth.token.email.matches('(?i)^spitze\\.deutsch@gmail\\.com$'))
+      );
     }
 
     function isTeacher() {

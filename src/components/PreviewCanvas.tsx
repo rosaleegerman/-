@@ -28,7 +28,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup
 } from 'firebase/auth';
-import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, auth, storage, handleFirestoreError, OperationType } from '../lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface PreviewCanvasProps {
   data: WebsiteData;
@@ -70,7 +71,13 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   const [isSubmittingNotice, setIsSubmittingNotice] = useState(false);
   const [noticeTitle, setNoticeTitle] = useState('');
   const [noticeContent, setNoticeContent] = useState('');
-  const [newNoticeAttachments, setNewNoticeAttachments] = useState<AttachmentItem[]>([]);
+  const [newNoticeAttachments, setNewNoticeAttachments] = useState<{
+    file: File;
+    name: string;
+    type: string;
+    size: number;
+    previewUrl?: string;
+  }[]>([]);
   const [isDragActive, setIsDragActive] = useState(false);
   const [showTuitionPopup, setShowTuitionPopup] = useState(false);
   
@@ -541,17 +548,53 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
     }
     setIsSubmittingNotice(true);
     const newNoticeId = `notice-${Date.now()}`;
-    const newNotice: Notice = {
-      id: newNoticeId,
-      title: noticeTitle,
-      author: currentUser.name,
-      email: currentUser.email,
-      content: noticeContent,
-      createdAt: new Date().toISOString(),
-      attachments: newNoticeAttachments
-    };
+    
     try {
+      const attachmentsList: AttachmentItem[] = [];
+
+      // If we have select attachments, upload them to Firebase Storage
+      if (newNoticeAttachments.length > 0) {
+        for (const attachment of newNoticeAttachments) {
+          try {
+            const file = attachment.file;
+            const storagePath = `notices/${newNoticeId}/${Date.now()}_${file.name}`;
+            const storageRef = ref(storage, storagePath);
+            
+            const snapshot = await uploadBytes(storageRef, file);
+            const downloadUrl = await getDownloadURL(snapshot.ref);
+            
+            attachmentsList.push({
+              name: attachment.name,
+              type: attachment.type,
+              size: attachment.size,
+              dataUrl: downloadUrl // Store Storage download URL in dataUrl
+            });
+          } catch (uploadErr) {
+            console.error('File upload failed for', attachment.name, uploadErr);
+            throw new Error(`파일 업로드 실패: ${attachment.name}. 다시 시도해 주세요.`);
+          }
+        }
+      }
+
+      const newNotice: Notice = {
+        id: newNoticeId,
+        title: noticeTitle,
+        author: currentUser.name,
+        email: currentUser.email,
+        content: noticeContent,
+        createdAt: new Date().toISOString(),
+        attachments: attachmentsList
+      };
+
       await setDoc(doc(db, 'notices', newNoticeId), newNotice);
+
+      // Revoke preview object URLs to release memory
+      newNoticeAttachments.forEach(att => {
+        if (att.previewUrl) {
+          URL.revokeObjectURL(att.previewUrl);
+        }
+      });
+
       setNoticeTitle('');
       setNoticeContent('');
       setNewNoticeAttachments([]);
@@ -589,24 +632,27 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
     if (files.length === 0) return;
 
     files.forEach(file => {
-      // 1MB is firestore doc limit, so keep to 800KB Max
-      if (file.size > 800000) {
-        alert(`용량이 너무 큽니다: ${file.name} (800KB 이하의 사진/파일만 등록할 수 있습니다.)`);
+      // Allow up to 5MB with Firebase Storage
+      if (file.size > 5000000) {
+        alert(`용량이 너무 큽니다: ${file.name} (5MB 이하의 사진/파일만 등록할 수 있습니다.)`);
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setNewNoticeAttachments(prev => [
-          ...prev,
-          {
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            dataUrl: reader.result as string
-          }
-        ]);
-      };
-      reader.readAsDataURL(file);
+      
+      let previewUrl = '';
+      if (file.type.startsWith('image/')) {
+        previewUrl = URL.createObjectURL(file);
+      }
+
+      setNewNoticeAttachments(prev => [
+        ...prev,
+        {
+          file,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          previewUrl
+        }
+      ]);
     });
   };
 
@@ -628,6 +674,10 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   };
 
   const removeNoticeAttachment = (indexToRemove: number) => {
+    const item = newNoticeAttachments[indexToRemove];
+    if (item.previewUrl) {
+      URL.revokeObjectURL(item.previewUrl);
+    }
     setNewNoticeAttachments(prev => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
@@ -1745,7 +1795,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                 {/* 사진 및 파일 첨부 - 드래그앤드롭 + 클릭 업로드 */}
                 <div className="space-y-2 text-left">
                   <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider text-left">
-                    사진 및 파일 첨부 (최대 용량 개당 800KB 제한)
+                    사진 및 파일 첨부 (최대 용량 개당 5MB 제한)
                   </label>
                   
                   <div 
@@ -1772,7 +1822,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                       여기로 파일/이미지를 드래그하거나 클릭하여 선택하세요
                     </p>
                     <p className="text-[10px] text-zinc-500 mt-1 font-medium">
-                      사진(JPEG, PNG) 및 일반 문서 등 첨부 가능 (개당 최대 800KB)
+                      사진(JPEG, PNG) 및 일반 문서 등 첨부 가능 (개당 최대 5MB)
                     </p>
                   </div>
 
