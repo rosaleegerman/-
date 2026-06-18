@@ -28,8 +28,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup
 } from 'firebase/auth';
-import { db, auth, storage, handleFirestoreError, OperationType } from '../lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 
 interface PreviewCanvasProps {
   data: WebsiteData;
@@ -586,28 +585,41 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
 
       const attachmentsList: AttachmentItem[] = [];
 
-      // If we have select attachments, upload them to Firebase Storage
+      // If we have select attachments, upload them to Cloudinary
       if (newNoticeAttachments.length > 0) {
         console.log("2. 파일 업로드 시작, 총 개수:", newNoticeAttachments.length);
 
         for (const attachment of newNoticeAttachments) {
           try {
-            console.log(`파일 업로드 시작: ${attachment.name}`);
+            console.log(`Cloudinary 파일 업로드 시작: ${attachment.name}`);
             const file = attachment.file;
-            const storagePath = `notices/${newNoticeId}/${Date.now()}_${file.name}`;
-            const storageRef = ref(storage, storagePath);
             
-            const snapshot = await uploadBytes(storageRef, file);
-            console.log(`파일 업로드 완료(바이트 전송): ${attachment.name}`);
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("upload_preset", "vollmond_notice");
 
-            const downloadUrl = await getDownloadURL(snapshot.ref);
-            console.log(`파일 다운로드 URL 다운성공: ${attachment.name} -> ${downloadUrl}`);
+            const response = await fetch(
+              "https://api.cloudinary.com/v1_1/dxlvs3dg2/image/upload",
+              {
+                method: "POST",
+                body: formData,
+              }
+            );
+
+            if (!response.ok) {
+              const errBody = await response.text();
+              throw new Error(`Cloudinary HTTP 에러! 상태: ${response.status}, 내용: ${errBody}`);
+            }
+
+            const data = await response.json();
+            const downloadUrl = data.secure_url;
+            console.log(`Cloudinary 파일 업로드 성공: ${attachment.name} -> ${downloadUrl}`);
             
             attachmentsList.push({
               name: attachment.name,
               type: attachment.type,
               size: attachment.size,
-              dataUrl: downloadUrl // Store Storage download URL in dataUrl
+              dataUrl: downloadUrl
             });
           } catch (uploadErr: any) {
             console.error('File upload failed for', attachment.name, uploadErr);
