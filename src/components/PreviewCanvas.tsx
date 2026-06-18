@@ -538,6 +538,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   // --- 공지사항전용 데이터 처리 함수군 ---
   const handleCreateNotice = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!currentUser || currentUser.role !== 'admin') {
       alert('관리자만 공지사항을 등록할 수 있습니다.');
       return;
@@ -546,22 +547,31 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
       alert('공지사항의 제목과 내용을 모두 입력해 주세요.');
       return;
     }
+
     setIsSubmittingNotice(true);
     const newNoticeId = `notice-${Date.now()}`;
     
     try {
+      console.log("1. 공지 등록 시작", { id: newNoticeId, title: noticeTitle });
+
       const attachmentsList: AttachmentItem[] = [];
 
       // If we have select attachments, upload them to Firebase Storage
       if (newNoticeAttachments.length > 0) {
+        console.log("2. 파일 업로드 시작, 총 개수:", newNoticeAttachments.length);
+
         for (const attachment of newNoticeAttachments) {
           try {
+            console.log(`파일 업로드 시작: ${attachment.name}`);
             const file = attachment.file;
             const storagePath = `notices/${newNoticeId}/${Date.now()}_${file.name}`;
             const storageRef = ref(storage, storagePath);
             
             const snapshot = await uploadBytes(storageRef, file);
+            console.log(`파일 업로드 완료(바이트 전송): ${attachment.name}`);
+
             const downloadUrl = await getDownloadURL(snapshot.ref);
+            console.log(`파일 다운로드 URL 다운성공: ${attachment.name} -> ${downloadUrl}`);
             
             attachmentsList.push({
               name: attachment.name,
@@ -569,24 +579,30 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
               size: attachment.size,
               dataUrl: downloadUrl // Store Storage download URL in dataUrl
             });
-          } catch (uploadErr) {
+          } catch (uploadErr: any) {
             console.error('File upload failed for', attachment.name, uploadErr);
-            throw new Error(`파일 업로드 실패: ${attachment.name}. 다시 시도해 주세요.`);
+            throw new Error(`파일 업로드 중 오류가 발생했습니다 (${attachment.name}): ${uploadErr.message || uploadErr}`);
           }
         }
+        console.log("3. 파일 전체 업로드 완료", attachmentsList);
+      } else {
+        console.log("2. 첨부 파일이 없습니다. 바로 Firestore 저장을 진행합니다.");
       }
+
+      console.log("4. Firestore 저장 시작", newNoticeId);
 
       const newNotice: Notice = {
         id: newNoticeId,
-        title: noticeTitle,
+        title: noticeTitle.trim(),
         author: currentUser.name,
         email: currentUser.email,
-        content: noticeContent,
+        content: noticeContent.trim(),
         createdAt: new Date().toISOString(),
         attachments: attachmentsList
       };
 
       await setDoc(doc(db, 'notices', newNoticeId), newNotice);
+      console.log("5. Firestore 저장 완료");
 
       // Revoke preview object URLs to release memory
       newNoticeAttachments.forEach(att => {
@@ -595,14 +611,19 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
         }
       });
 
+      alert('공지사항 등록이 성공적으로 완료되었습니다.');
+
+      // Reset Form State
       setNoticeTitle('');
       setNoticeContent('');
       setNewNoticeAttachments([]);
       setShowCreateNoticeModal(false);
-    } catch (err) {
-      console.error(err);
-      handleFirestoreError(err, OperationType.CREATE, `notices/${newNoticeId}`);
+
+    } catch (err: any) {
+      console.error("공지 등록 실패:", err);
+      alert("공지 등록에 실패했습니다: " + (err.message || err));
     } finally {
+      console.log("6. 공지 등록 처리 종료 (loading 상태 해제)");
       setIsSubmittingNotice(false);
     }
   };
