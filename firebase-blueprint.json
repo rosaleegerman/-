@@ -27,6 +27,34 @@
         "replies": { "type": "string", "description": "Admin/Teacher feedback reply" }
       },
       "required": ["id", "title", "author", "email", "content", "createdAt"]
+    },
+    "Notice": {
+      "title": "Notice",
+      "description": "An academy announcement created by administrators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the notice" },
+        "title": { "type": "string", "description": "Title of the notice" },
+        "author": { "type": "string", "description": "Author display name" },
+        "email": { "type": "string", "description": "Author email address" },
+        "content": { "type": "string", "description": "Content of the notice" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "attachments": {
+          "type": "array",
+          "description": "Attached images or files represented as base64 objects",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "size": { "type": "number" },
+              "dataUrl": { "type": "string" }
+            },
+            "required": ["name", "type", "size", "dataUrl"]
+          }
+        }
+      },
+      "required": ["id", "title", "author", "email", "content", "createdAt"]
     }
   },
   "firestore": {
@@ -37,6 +65,10 @@
     "posts/{postId}": {
       "schema": "Post",
       "description": "Study posts collection"
+    },
+    "notices/{noticeId}": {
+      "schema": "Notice",
+      "description": "Academy notice and announcements collection"
     }
   }
 }

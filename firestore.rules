@@ -90,5 +90,13 @@ service cloud.firestore {
         isSignedIn() && resource.data.email.matches('(?i)^' + request.auth.token.email + '$')
       );
     }
+
+    // --- Notices Collection ---
+    match /notices/{noticeId} {
+      // Anyone can view notices
+      allow read: if true;
+      // Only administrators can write/create/update/delete notices
+      allow create, update, delete: if isAdmin();
+    }
   }
 }

@@ -76,6 +76,24 @@ export interface BoardPost {
   replies?: string; // 학원 답변 (선택 사항)
 }
 
+// 첨부파일 및 공지사항 타입
+export interface AttachmentItem {
+  name: string;
+  type: string;
+  size: number;
+  dataUrl: string;
+}
+
+export interface Notice {
+  id: string;
+  title: string;
+  author: string;
+  email: string;
+  content: string;
+  createdAt: string;
+  attachments?: AttachmentItem[];
+}
+
 export interface StatItem {
   id: string;
   value: string;

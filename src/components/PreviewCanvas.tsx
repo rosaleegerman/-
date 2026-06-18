@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { WebsiteData, DeviceViewMode, CMSPost, BoardPost } from '../types';
+import { WebsiteData, DeviceViewMode, CMSPost, BoardPost, Notice, AttachmentItem } from '../types';
 import * as Icons from 'lucide-react';
 import defaultHeroImage from '../../public/assets/images/blue_sky_moon_1779892119976.png';
 import kakaotalkQrCode from '../../public/assets/images/kakaotalk_qr_code_1779893911603.png';
@@ -61,6 +61,18 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
   const [showVideoPopup, setShowVideoPopup] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [activeCourseTab, setActiveCourseTab] = useState<'regular' | 'certificate'>('regular');
+
+  // --- 공지사항전용 상태 변수들 ---
+  const [showNoticePopup, setShowNoticePopup] = useState(false);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
+  const [showCreateNoticeModal, setShowCreateNoticeModal] = useState(false);
+  const [isSubmittingNotice, setIsSubmittingNotice] = useState(false);
+  const [noticeTitle, setNoticeTitle] = useState('');
+  const [noticeContent, setNoticeContent] = useState('');
+  const [newNoticeAttachments, setNewNoticeAttachments] = useState<AttachmentItem[]>([]);
+  const [isDragActive, setIsDragActive] = useState(false);
+  const [showTuitionPopup, setShowTuitionPopup] = useState(false);
   
   // --- [회원가입제 회원 관리 데이터 및 상태] ---
   const [registeredUsers, setRegisteredUsers] = useState<HomeUser[]>([]);
@@ -136,6 +148,23 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
       setFirestorePosts(postsList);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'posts');
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Sync notices from Firestore's notices collection
+  useEffect(() => {
+    const q = collection(db, 'notices');
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const noticesList: Notice[] = [];
+      snapshot.forEach((doc) => {
+        noticesList.push({ id: doc.id, ...doc.data() } as Notice);
+      });
+      // Sort descending by creation date
+      noticesList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setNotices(noticesList);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'notices');
     });
     return () => unsubscribe();
   }, []);
@@ -499,6 +528,109 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
     }
   };
 
+  // --- 공지사항전용 데이터 처리 함수군 ---
+  const handleCreateNotice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || currentUser.role !== 'admin') {
+      alert('관리자만 공지사항을 등록할 수 있습니다.');
+      return;
+    }
+    if (!noticeTitle.trim() || !noticeContent.trim()) {
+      alert('공지사항의 제목과 내용을 모두 입력해 주세요.');
+      return;
+    }
+    setIsSubmittingNotice(true);
+    const newNoticeId = `notice-${Date.now()}`;
+    const newNotice: Notice = {
+      id: newNoticeId,
+      title: noticeTitle,
+      author: currentUser.name,
+      email: currentUser.email,
+      content: noticeContent,
+      createdAt: new Date().toISOString(),
+      attachments: newNoticeAttachments
+    };
+    try {
+      await setDoc(doc(db, 'notices', newNoticeId), newNotice);
+      setNoticeTitle('');
+      setNoticeContent('');
+      setNewNoticeAttachments([]);
+      setShowCreateNoticeModal(false);
+    } catch (err) {
+      console.error(err);
+      handleFirestoreError(err, OperationType.CREATE, `notices/${newNoticeId}`);
+    } finally {
+      setIsSubmittingNotice(false);
+    }
+  };
+
+  const handleDeleteNotice = async (noticeId: string) => {
+    if (!window.confirm('이 공지사항 게시글을 영구적으로 삭제하시겠습니까?')) {
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'notices', noticeId));
+      if (selectedNotice?.id === noticeId) {
+        setSelectedNotice(null);
+      }
+    } catch (err) {
+      console.error(err);
+      handleFirestoreError(err, OperationType.DELETE, `notices/${noticeId}`);
+    }
+  };
+
+  const handleNoticeFileChange = (e: React.ChangeEvent<HTMLInputElement> | React.DragEvent) => {
+    let files: File[] = [];
+    if ('dataTransfer' in e) {
+      files = Array.from(e.dataTransfer.files);
+    } else if (e.target && 'files' in e.target && e.target.files) {
+      files = Array.from(e.target.files);
+    }
+    if (files.length === 0) return;
+
+    files.forEach(file => {
+      // 1MB is firestore doc limit, so keep to 800KB Max
+      if (file.size > 800000) {
+        alert(`용량이 너무 큽니다: ${file.name} (800KB 이하의 사진/파일만 등록할 수 있습니다.)`);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewNoticeAttachments(prev => [
+          ...prev,
+          {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            dataUrl: reader.result as string
+          }
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleNoticeDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setIsDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setIsDragActive(false);
+    }
+  };
+
+  const handleNoticeDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+    handleNoticeFileChange(e);
+  };
+
+  const removeNoticeAttachment = (indexToRemove: number) => {
+    setNewNoticeAttachments(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
   // 폰트 스타일 매핑
   const getFontClass = () => {
     switch (theme.fontFamily) {
@@ -598,15 +730,16 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
           <nav className="hidden sm:flex items-center gap-6 text-sm font-medium">
             <a href="#about" className="hover:opacity-80 transition-opacity" style={{ color: theme.textColor }}>학원소개</a>
             <a 
-              href="#courses" 
+              href="#notices" 
               onClick={(e) => {
                 e.preventDefault();
-                setShowCourseInfo(true);
+                setShowNoticePopup(true);
               }}
-              className="hover:opacity-80 transition-opacity" 
+              className="hover:opacity-80 transition-opacity flex items-center gap-1 font-bold text-amber-300"
               style={{ color: theme.textColor }}
             >
-              수업 정보
+              <span>공지사항</span>
+              <span className="text-[9px] px-1 bg-amber-500/10 text-amber-400 border border-amber-500/15 rounded scale-95 font-medium">Notice</span>
             </a>
             <a 
               href="#contact" 
@@ -1038,7 +1171,9 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
               <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] opacity-60 text-zinc-400">
                 <span>대표: 이로사</span>
                 <span className="opacity-30">|</span>
-                <span>사업자 등록번호: 235-94-01846</span>
+                <span>사업자 등록번호: 235-94-01846/365-98-01844</span>
+                <span className="opacity-30">|</span>
+                <span>학원설립운영 등록번호: 제2022-41호/제2025-27호</span>
               </div>
               <p className="mt-1 opacity-50" style={{ color: theme.mutedTextColor }}>
                 © 2026 {seo.metaTitle.split('|')[0].trim()}. All rights reserved.
@@ -1048,6 +1183,8 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
               <span className="cursor-pointer hover:underline">이용약관</span>
               <span>•</span>
               <span className="cursor-pointer hover:underline">개인정보처리방침</span>
+              <span>•</span>
+              <span onClick={() => setShowTuitionPopup(true)} className="cursor-pointer hover:underline text-amber-300 font-bold hover:text-amber-200 transition-colors">[수강료 안내]</span>
             </div>
           </div>
         </footer>
@@ -1267,12 +1404,6 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                           teacher: '이로사 T',
                           desc: '[B2 대비반] 매주 금요일 18-21시 (영상 수강 가능 / 자체 제작 교재)',
                           price: '4회 400,000원',
-                        },
-                    {
-                          subject: '스페인어',
-                          teacher: '디오 T',
-                          desc: '[A2 수준 종합반] 매주 화/목 19-20:30 (영상 수강 가능 / 자체 제작 교재)',
-                          price: '8회 400,000원',
                         }
                       ].map((item, idx) => (
                         <div 
@@ -1327,6 +1458,508 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                     <Icons.MessageSquare size={13} /> 수강 상담 신청하기
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* -------------------- 공지사항 게시판 화면 -------------------- */}
+        {showNoticePopup && (
+          <div 
+            className={`${viewMode === 'desktop' ? 'fixed' : 'absolute'} inset-0 bg-black/90 backdrop-blur-sm flex items-start md:items-center justify-center p-4 pt-10 md:pt-4 z-50 overflow-y-auto animate-fade-in`}
+            onClick={() => {
+              setShowNoticePopup(false);
+              setSelectedNotice(null);
+            }}
+          >
+            <div 
+              className="w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col max-h-[92%] shadow-2xl relative"
+              style={{ fontFamily: theme.fontFamily === 'serif' ? 'Georgia, Cambria, serif' : 'system-ui, sans-serif' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 장식용 탑 디자인 바 */}
+              <div className="h-1.5 w-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600" />
+
+              {/* 닫기 버튼 */}
+              <button 
+                onClick={() => {
+                  setShowNoticePopup(false);
+                  setSelectedNotice(null);
+                }}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white bg-zinc-850 hover:bg-zinc-800 p-2 text-xs rounded-full transition-all z-10 font-bold"
+              >
+                <Icons.X size={16} />
+              </button>
+
+              {/* 헤더 */}
+              <div className="p-6 md:p-8 border-b border-zinc-800 bg-zinc-900">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center bg-amber-500/10 text-amber-500">
+                    <Icons.Megaphone size={12} className="text-amber-500" />
+                  </div>
+                  <span className="text-xs font-bold tracking-widest uppercase text-amber-500">
+                    VOLLMOND ANNOUNCEMENTS
+                  </span>
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl md:text-2xl font-black text-white">
+                      폴몬트 학원 공지사항 / 게시판
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      중요 학원 일정, 공지글, 유용한 공부 가이드 자료를 확인하세요.
+                    </p>
+                  </div>
+                  {currentUser?.role === 'admin' && (
+                    <button 
+                      onClick={() => setShowCreateNoticeModal(true)}
+                      className="px-4 py-2 bg-amber-500 text-black text-xs font-black rounded-lg hover:bg-amber-400 transition-colors flex items-center gap-1 shadow-md self-start sm:self-center"
+                    >
+                      <Icons.PlusSquare size={14} />
+                      <span>공지 작성</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 공지사항 상세 또는 리스트 바디 */}
+              <div className="p-6 md:p-8 overflow-y-auto flex-1 bg-zinc-950">
+                {selectedNotice ? (
+                  /* ------------------ [공지사항 상세 보기] ------------------ */
+                  <div className="space-y-6 animate-fade-in">
+                    {/* 뒤로 가기 */}
+                    <button 
+                      onClick={() => setSelectedNotice(null)}
+                      className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 font-bold mb-4 bg-zinc-900 hover:bg-zinc-850 px-2.5 py-1.5 rounded border border-zinc-800 animate-pulse"
+                    >
+                      <Icons.ArrowLeft size={13} />
+                      <span>전체 목록 가기</span>
+                    </button>
+
+                    <div className="border-b border-zinc-805 pb-4">
+                      <h3 className="text-lg md:text-xl font-bold text-white tracking-tight break-keep text-left">
+                        {selectedNotice.title}
+                      </h3>
+                      <div className="flex items-center gap-2.5 text-xs text-zinc-500 mt-2.5">
+                        <span className="font-semibold text-zinc-300">{selectedNotice.author}</span>
+                        <span>|</span>
+                        <span>{new Date(selectedNotice.createdAt).toLocaleDateString()}</span>
+                        <span>|</span>
+                        <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/10 font-black">ADMIN</span>
+                      </div>
+                    </div>
+
+                    {/* 본문 내용 */}
+                    <div className="text-zinc-305 text-sm leading-relaxed whitespace-pre-wrap font-medium break-keep text-left text-zinc-300">
+                      {selectedNotice.content}
+                    </div>
+
+                    {/* 사진 첨부 갤러리 */}
+                    {selectedNotice.attachments && selectedNotice.attachments.filter(a => a.type.startsWith('image/')).length > 0 && (
+                      <div className="space-y-3.5 pt-4 border-t border-zinc-900">
+                        <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1 text-left">
+                          <Icons.Image size={12} className="text-amber-500" />
+                          <span>첨부 이미지</span>
+                        </h4>
+                        <div className="grid grid-cols-1 gap-4">
+                          {selectedNotice.attachments.filter(a => a.type.startsWith('image/')).map((item, idx) => (
+                            <div key={idx} className="overflow-hidden rounded-lg border border-zinc-800 max-w-full bg-zinc-900 group">
+                              <img 
+                                src={item.dataUrl} 
+                                alt={item.name} 
+                                className="w-full h-auto object-cover rounded-lg block transition-transform duration-300 group-hover:scale-[1.01]" 
+                                referrerPolicy="no-referrer"
+                              />
+                              <p className="text-[10px] text-zinc-500 p-2 border-t border-zinc-850 truncate bg-zinc-950/60 font-mono text-left">
+                                {item.name} ({(item.size / 1024).toFixed(1)} KB)
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 일반 파일 첨부 (파일 다운로드용 카드) */}
+                    {selectedNotice.attachments && selectedNotice.attachments.filter(a => !a.type.startsWith('image/')).length > 0 && (
+                      <div className="space-y-3 pt-4 border-t border-zinc-900">
+                        <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1 text-left">
+                          <Icons.Paperclip size={12} className="text-amber-500" />
+                          <span>첨부 파일 목록 (다운로드)</span>
+                        </h4>
+                        <div className="space-y-2">
+                          {selectedNotice.attachments.filter(a => !a.type.startsWith('image/')).map((item, idx) => (
+                            <a 
+                              key={idx}
+                              href={item.dataUrl}
+                              download={item.name}
+                              className="flex items-center justify-between p-3 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors group cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2.5 truncate max-w-[85%]">
+                                <Icons.FileText size={16} className="text-amber-500/80 shrink-0" />
+                                <div className="truncate text-left">
+                                  <p className="text-xs font-bold text-white truncate group-hover:text-amber-300 transition-colors">
+                                    {item.name}
+                                  </p>
+                                  <p className="text-[10px] text-zinc-500 font-mono">
+                                    {(item.size / 1024).toFixed(1)} KB
+                                  </p>
+                                </div>
+                              </div>
+                              <Icons.Download size={14} className="text-zinc-500 group-hover:text-amber-400 transition-colors" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* ------------------ [공지사항 전체 목록] ------------------ */
+                  <div className="space-y-4">
+                    {notices.length === 0 ? (
+                      <div className="py-12 text-center text-zinc-500 border border-zinc-900 rounded-lg">
+                        <Icons.Inbox size={32} className="mx-auto mb-2 opacity-30 text-amber-500" />
+                        <p className="text-xs font-bold font-sans">등록된 공지사항이 아직 존재하지 않습니다.</p>
+                        <p className="text-[10px] text-zinc-650 mt-1 font-sans">학원 관리자의 최신 공지가 있으면 여기에 즉시 표시됩니다.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {notices.map((notice) => {
+                          const hasImages = notice.attachments && notice.attachments.some(a => a.type.startsWith('image/'));
+                          const hasFiles = notice.attachments && notice.attachments.some(a => !a.type.startsWith('image/'));
+                          return (
+                            <div 
+                              key={notice.id}
+                              onClick={() => setSelectedNotice(notice)}
+                              className="bg-zinc-900 border border-zinc-800/80 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-amber-500/50 hover:bg-zinc-850 transition-all cursor-pointer group text-left"
+                            >
+                              <div className="space-y-1.5 truncate max-w-full sm:max-w-[75%]">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-extrabold uppercase">공지</span>
+                                  <h3 className="text-sm font-extrabold text-white group-hover:text-amber-300 transition-colors truncate">
+                                    {notice.title}
+                                  </h3>
+                                  {hasImages && <Icons.Image size={12} className="text-amber-500 opacity-80" title="이미지 포함" />}
+                                  {hasFiles && <Icons.Paperclip size={12} className="text-zinc-400 opacity-80" title="파일 첨부됨" />}
+                                </div>
+                                <p className="text-xs text-zinc-400 line-clamp-2 break-all font-medium leading-relaxed">
+                                  {notice.content}
+                                </p>
+                              </div>
+                              <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t border-zinc-800/50 sm:border-0 pt-2 sm:pt-0 shrink-0 text-xs">
+                                <span className="text-[10px] text-zinc-500 uppercase sm:mb-0.5 font-bold">등록일</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-zinc-300 font-medium">
+                                    {new Date(notice.createdAt).toLocaleDateString()}
+                                  </span>
+                                  {currentUser?.role === 'admin' && (
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteNotice(notice.id);
+                                      }}
+                                      className="p-1 px-1.5 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded hover:bg-rose-500 hover:text-white transition-all text-[10px] font-bold"
+                                      title="공지 삭제"
+                                    >
+                                      삭제
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 푸터 영역 */}
+              <div className="p-4 bg-zinc-900 border-t border-zinc-850 flex items-center justify-end">
+                <button 
+                  onClick={() => {
+                    setShowNoticePopup(false);
+                    setSelectedNotice(null);
+                  }}
+                  className="px-5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-bold transition-all"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* -------------------- 공지사항 작성 모달 (관리자 전용) -------------------- */}
+        {showCreateNoticeModal && currentUser?.role === 'admin' && (
+          <div 
+            className={`${viewMode === 'desktop' ? 'fixed' : 'absolute'} inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-[100] overflow-y-auto animate-fade-in`}
+            onClick={() => setShowCreateNoticeModal(false)}
+          >
+            <div 
+              className="w-full max-w-xl bg-zinc-900 border border-zinc-850 rounded-2xl overflow-hidden shadow-2xl relative flex flex-col max-h-[92%]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="h-1.5 w-full bg-gradient-to-r from-amber-500 to-amber-600" />
+              
+              <button 
+                onClick={() => setShowCreateNoticeModal(false)}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white p-2.5 rounded-full"
+              >
+                <Icons.X size={16} />
+              </button>
+
+              <div className="p-6 md:p-8 border-b border-zinc-850">
+                <h3 className="text-lg font-black text-white flex items-center gap-1.5 text-left">
+                  <Icons.PlusCircle className="text-amber-500" size={18} />
+                  <span>새로운 아카데미 공지 등록</span>
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1 text-left font-sans">폴몬트 수강생들에게 전달할 중요 정보, 자료 및 사진을 기재해 업로드해 주십시오.</p>
+              </div>
+
+              <form onSubmit={handleCreateNotice} className="p-6 md:p-8 overflow-y-auto flex-1 space-y-5 bg-zinc-950">
+                <div className="space-y-1.5 text-left">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider text-left">공지사항 제목</label>
+                  <input 
+                    type="text"
+                    required
+                    value={noticeTitle}
+                    onChange={(e) => setNoticeTitle(e.target.value)}
+                    placeholder="공지사항의 핵심 주제 제목을 적어주세요."
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 font-medium"
+                  />
+                </div>
+
+                <div className="space-y-1.5 text-left">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider text-left">공지 본문 내용</label>
+                  <textarea 
+                    required
+                    rows={8}
+                    value={noticeContent}
+                    onChange={(e) => setNoticeContent(e.target.value)}
+                    placeholder="수강생들에게 안내할 공지사항 본문 내용을 입력해 주세요. (줄바꿈이 자동 지원됩니다.)"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 font-medium whitespace-pre-wrap leading-relaxed"
+                  />
+                </div>
+
+                {/* 사진 및 파일 첨부 - 드래그앤드롭 + 클릭 업로드 */}
+                <div className="space-y-2 text-left">
+                  <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider text-left">
+                    사진 및 파일 첨부 (최대 용량 개당 800KB 제한)
+                  </label>
+                  
+                  <div 
+                    onDragEnter={handleNoticeDrag}
+                    onDragOver={handleNoticeDrag}
+                    onDragLeave={handleNoticeDrag}
+                    onDrop={handleNoticeDrop}
+                    onClick={() => document.getElementById('notice-file-input')?.click()}
+                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+                      isDragActive 
+                        ? 'border-amber-500 bg-amber-500/5' 
+                        : 'border-zinc-800 hover:border-zinc-700 bg-zinc-900/30'
+                    }`}
+                  >
+                    <input 
+                      type="file"
+                      id="notice-file-input"
+                      multiple
+                      className="hidden"
+                      onChange={handleNoticeFileChange}
+                    />
+                    <Icons.UploadCloud className="mx-auto text-zinc-500 group-hover:text-white mb-2" size={24} />
+                    <p className="text-xs font-bold text-zinc-300">
+                      여기로 파일/이미지를 드래그하거나 클릭하여 선택하세요
+                    </p>
+                    <p className="text-[10px] text-zinc-500 mt-1 font-medium">
+                      사진(JPEG, PNG) 및 일반 문서 등 첨부 가능 (개당 최대 800KB)
+                    </p>
+                  </div>
+
+                  {/* 현재 등록된 파일 리스트 */}
+                  {newNoticeAttachments.length > 0 && (
+                    <div className="space-y-2 pt-2 text-left">
+                      <p className="text-xs font-extrabold text-zinc-400">등록 대기 중인 파일 ({newNoticeAttachments.length}개)</p>
+                      <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                        {newNoticeAttachments.map((item, idx) => {
+                          const isImg = item.type.startsWith('image/');
+                          return (
+                            <div key={idx} className="flex items-center justify-between p-2 rounded bg-zinc-900 border border-zinc-800 text-xs">
+                              <div className="flex items-center gap-2 truncate max-w-[85%] text-left">
+                                {isImg ? <Icons.Image size={13} className="text-amber-500" /> : <Icons.FileText size={13} className="text-zinc-400" />}
+                                <span className="text-[11px] truncate text-zinc-300 font-medium">{item.name}</span>
+                                <span className="text-[9px] text-zinc-500 font-mono">({(item.size / 1024).toFixed(1)} KB)</span>
+                              </div>
+                              <button 
+                                type="button"
+                                onClick={() => removeNoticeAttachment(idx)}
+                                className="text-zinc-500 hover:text-rose-400 p-1 cursor-pointer"
+                                title="제거"
+                              >
+                                <Icons.Trash size={12} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-zinc-850">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setNoticeTitle('');
+                      setNoticeContent('');
+                      setNewNoticeAttachments([]);
+                      setShowCreateNoticeModal(false);
+                    }}
+                    className="flex-1 px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-bold transition-all"
+                  >
+                    취소
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isSubmittingNotice}
+                    className="flex-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black rounded-lg text-xs font-extrabold transition-all hover:brightness-110 shadow-lg flex items-center justify-center gap-1"
+                  >
+                    {isSubmittingNotice ? (
+                      <>
+                        <Icons.Loader2 size={13} className="animate-spin" />
+                        <span>공지 등록 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Icons.CheckCircle size={13} />
+                        <span>공지 게시글 최종 등록</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {showTuitionPopup && (
+          <div 
+            className={`${viewMode === 'desktop' ? 'fixed' : 'absolute'} inset-0 bg-black/90 backdrop-blur-sm flex items-start md:items-center justify-center p-4 pt-10 md:pt-4 z-50 overflow-y-auto animate-fade-in`}
+            onClick={() => setShowTuitionPopup(false)}
+          >
+            <div 
+              className="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl relative animate-scale-up"
+              style={{ fontFamily: theme.fontFamily === 'serif' ? 'Georgia, Cambria, serif' : 'system-ui, sans-serif' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="h-1.5 w-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600" />
+
+              <button 
+                onClick={() => setShowTuitionPopup(false)}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white bg-zinc-800/80 hover:bg-zinc-800 p-2 text-xs rounded-full transition-all z-10"
+              >
+                <Icons.X size={16} />
+              </button>
+
+              <div className="p-6 md:p-8 border-b border-zinc-800 bg-zinc-900 text-left">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center bg-amber-500/10 text-amber-500">
+                    <Icons.CreditCard size={12} className="text-amber-500" />
+                  </div>
+                  <span className="text-[10px] font-black tracking-widest uppercase text-amber-400 font-mono">
+                    VOLLMOND TUITION INFO
+                  </span>
+                </div>
+                <h2 className="text-xl md:text-2xl font-black text-white">
+                  수강료 안내
+                </h2>
+                <p className="text-xs text-zinc-450 mt-1 font-sans text-zinc-400">
+                  폴몬트 아카데미의 각 교육과정별 상세 수강료 내역입니다.
+                </p>
+              </div>
+
+              <div className="p-6 bg-zinc-950">
+                <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+                  <table className="w-full border-collapse text-left text-xs md:text-sm">
+                    <thead>
+                      <tr className="bg-zinc-850/65 border-b border-zinc-800 text-zinc-400 font-extrabold uppercase tracking-wider text-[11px]">
+                        <th className="px-4 py-3 md:px-5">구분 / 교육 과정</th>
+                        <th className="px-4 py-3 md:px-5 text-right">월 수강료</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/40 text-zinc-300 font-medium font-sans">
+                      <tr className="hover:bg-zinc-800/30 transition-colors">
+                        <td className="px-4 py-3.5 md:px-5 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <span>고등학생 내신대비 전공어</span>
+                        </td>
+                        <td className="px-4 py-3.5 md:px-5 text-right font-bold text-amber-300 font-mono text-zinc-200">
+                          350,000원
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-zinc-800/30 transition-colors">
+                        <td className="px-4 py-3.5 md:px-5 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <span>고등학생 영어</span>
+                        </td>
+                        <td className="px-4 py-3.5 md:px-5 text-right font-bold text-amber-300 font-mono text-zinc-200">
+                          400,000원
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-zinc-800/30 transition-colors">
+                        <td className="px-4 py-3.5 md:px-5 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <span>고등학생 수학</span>
+                        </td>
+                        <td className="px-4 py-3.5 md:px-5 text-right font-bold text-amber-300 font-mono text-zinc-200">
+                          450,000원
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-zinc-800/30 transition-colors">
+                        <td className="px-4 py-3.5 md:px-5 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-505 bg-amber-500" />
+                          <span>중학생 영어</span>
+                        </td>
+                        <td className="px-4 py-3.5 md:px-5 text-right font-bold text-amber-300 font-mono text-zinc-200">
+                          350,000원
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-zinc-800/30 transition-colors">
+                        <td className="px-4 py-3.5 md:px-5 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <span>중학생 수학</span>
+                        </td>
+                        <td className="px-4 py-3.5 md:px-5 text-right font-bold text-amber-300 font-mono text-zinc-200">
+                          370,000원
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-zinc-800/30 transition-colors">
+                        <td className="px-4 py-3.5 md:px-5 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <span>자격증 대비반</span>
+                        </td>
+                        <td className="px-4 py-3.5 md:px-5 text-right font-bold text-amber-300 font-mono text-zinc-200">
+                          400,000원
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 p-3.5 bg-amber-500/[0.04] rounded-xl border border-amber-500/10 text-left">
+                  <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
+                    * 모든 수강료는 교재비가 포함되지 않은 부가세 면세 금액입니다.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-zinc-900 border-t border-zinc-850 flex items-center justify-end">
+                <button 
+                  onClick={() => setShowTuitionPopup(false)}
+                  className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  닫기
+                </button>
               </div>
             </div>
           </div>
@@ -1729,11 +2362,14 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
               <button 
                 onClick={() => {
                   setShowMobileMenu(false);
-                  setShowCourseInfo(true);
+                  setShowNoticePopup(true);
                 }}
                 className="py-3 text-lg font-bold border-b border-zinc-900 text-zinc-300 hover:text-white flex items-center justify-between"
               >
-                <span>수업 정보</span>
+                <div className="flex items-center gap-2">
+                  <span>공지사항</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/15 font-medium uppercase tracking-widest scale-95">Notice</span>
+                </div>
                 <Icons.ChevronRight size={16} className="opacity-50" />
               </button>
 
