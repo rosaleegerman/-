@@ -1044,7 +1044,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
             {hero.imageUrl && (
               <div className="flex-1 w-full max-w-md">
                 <div 
-                  className={`overflow-hidden aspect-video md:aspect-square relative group/img cursor-pointer ${getRadiusClass()}`}
+                  className={`overflow-hidden relative group/img cursor-pointer ${getRadiusClass()}`}
                   style={{ 
                     border: `1px solid ${theme.primaryColor}20`,
                     boxShadow: `0 10px 30px rgba(0,0,0,0.6)`
@@ -1054,7 +1054,7 @@ export default function PreviewCanvas({ data, viewMode, onFocusSection, onUpdate
                     src={hero.imageUrl && (hero.imageUrl.includes('blue_sky_moon_1779892119976.png') || hero.imageUrl.endsWith('blue_sky_moon_1779892119976.png')) ? defaultHeroImage : hero.imageUrl} 
                     alt="Hero Graphics" 
                     referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                    className="w-full h-auto block object-contain transition-transform duration-500 hover:scale-105"
                   />
                 </div>
               </div>
